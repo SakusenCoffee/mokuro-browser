@@ -33,9 +33,12 @@ jobs:
       - name: Check desktop first launch and server lifecycle on Linux
         if: runner.os == 'Linux'
         run: xvfb-run -a python tools/smoke_installer.py --gui-cycle
-      - name: Check desktop first launch and server lifecycle on Windows/macOS
-        if: runner.os != 'Linux'
+      - name: Check desktop first launch and server lifecycle on macOS
+        if: runner.os == 'macOS'
         run: python tools/smoke_installer.py --gui-cycle
+      - name: Check installer and server lifecycle on Windows
+        if: runner.os == 'Windows'
+        run: python tools/smoke_installer.py
       - name: Cache verified AppImage packaging tools
         if: runner.os == 'Linux'
         uses: actions/cache@v4

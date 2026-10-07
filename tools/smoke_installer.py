@@ -17,7 +17,7 @@ def main():
     args = parser.parse_args()
     executable = str(args.executable or json.loads((ROOT / "build/installer-build.json").read_text())["executable"])
     prefix = [executable] + (["--appimage-extract-and-run"] if args.extract_and_run else [])
-    with tempfile.TemporaryDirectory(prefix="Mokuro Installer 日本語 ") as directory:
+    with tempfile.TemporaryDirectory(prefix="Mokuro Installer 日本語 ", ignore_cleanup_errors=True) as directory:
         root = Path(directory)
         installed, bins, state = root / "installation", root / "bin with spaces", root / "state"
         report = root / "report.json"
@@ -29,7 +29,8 @@ def main():
                      "--bin-dir", str(bins), "--state-dir", str(state),
                      "--report", str(report), "--gui-cycle-test"]
             subprocess.run(first, check=True, timeout=300)
-            assert json.loads(report.read_text()) == {"gui_cycle": True, "connect_code_visible": True}
+            cycle = json.loads(report.read_text())
+            assert cycle == {"gui_cycle": True, "connect_code_visible": True}, cycle
             record = json.loads((installed / "install.json").read_text())
             result = {**record, "python": str(Path(record["environment"]) /
                       ("Scripts/python.exe" if os.name == "nt" else "bin/python")),
@@ -54,7 +55,8 @@ def main():
             gui_report = root / "gui-cycle.json"
             subprocess.run([*prefix, "--root", str(installed), "--report", str(gui_report),
                             "--gui-cycle-test"], check=True, timeout=75)
-            assert json.loads(gui_report.read_text()) == {"gui_cycle": True, "connect_code_visible": True}
+            cycle = json.loads(gui_report.read_text())
+            assert cycle == {"gui_cycle": True, "connect_code_visible": True}, cycle
             stopped = subprocess.run([*prefix, "--server-action", "status", "--root", str(installed)],
                                      check=True, capture_output=True, text=True, encoding="utf-8")
             assert "Server off" in stopped.stdout, stopped.stdout
