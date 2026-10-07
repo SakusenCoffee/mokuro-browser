@@ -10,7 +10,7 @@ import sys
 import threading
 import time
 
-from installer import core, launcher
+from installer import core, launcher, updater
 
 def payload():
     root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
@@ -38,7 +38,8 @@ def execute(args, log):
     return core.install(uv, wheel, root=args.root, bin_dir=args.bin_dir,
                         reuse=not args.fresh, python=args.python,
                         autostart=args.autostart, modify_path=not args.no_path,
-                        state_dir=args.state_dir, native_host=native_host, log=log)
+                        state_dir=args.state_dir, native_host=native_host,
+                        export_browser_extension=not getattr(args, "launcher_only_update", False), log=log)
 
 def open_folder(folder):
     if os.name == "nt":
@@ -359,13 +360,64 @@ def gui(args):
     dashboard_button = ttk.Button(buttons, text="Open live reader", command=lambda: launcher.open_dashboard(installed_record))
     dashboard_button.pack(side="right")
     dashboard_button.configure(state="disabled")
+    update_info = None
+    update_button = ttk.Button(buttons, text="Update launcher")
+
+    def update_destination(info):
+        current = Path(sys.executable if getattr(sys, "frozen", False) else sys.argv[0]).absolute()
+        if (sys.platform.startswith("linux") and current.suffix == ".AppImage"
+                and os.access(current.parent, os.W_OK)):
+            return current
+        return core.default_root() / "updates" / info["name"]
+
+    def apply_update():
+        nonlocal update_info
+        if not update_info:
+            return
+        update_button.configure(state="disabled", text="Downloading update…")
+        write(f"Downloading Mokuro Browser {update_info['version']}. The browser extension will not be changed.")
+        def work():
+            try:
+                target = updater.download(update_info, update_destination(update_info))
+                updater.launch_update(target)
+                messages.put(("update_complete", None))
+            except Exception as error:
+                messages.put(("update_error", str(error)))
+        threading.Thread(target=work, daemon=True).start()
+
+    update_button.configure(command=apply_update)
+
+    def check_for_update():
+        def work():
+            try:
+                messages.put(("update_available", updater.available(bundled_version())))
+            except Exception as error:
+                messages.put(("update_check_error", str(error)))
+        threading.Thread(target=work, daemon=True).start()
     def poll():
-        nonlocal running, owned_server, server_pending, installed_record, history_pending, history_total_lines, observe_pending
+        nonlocal running, owned_server, server_pending, installed_record, history_pending, history_total_lines, observe_pending, update_info
         while not messages.empty():
             kind, value = messages.get_nowait()
             if kind == "log":
                 write(value)
                 continue
+            if kind == "update_available":
+                update_info = value
+                if value:
+                    update_button.configure(text=f"Update launcher · {value['version']}")
+                    update_button.pack(side="right", padx=(0, 8))
+                    write(f"Launcher update {value['version']} is available. The browser extension will stay as installed.")
+                continue
+            if kind == "update_check_error":
+                # An unavailable network must not affect reading or OCR.
+                continue
+            if kind == "update_error":
+                update_button.configure(state="normal", text="Retry launcher update")
+                write("Launcher update failed: " + value)
+                continue
+            if kind == "update_complete":
+                root.destroy()
+                return
             if kind == "server":
                 action, result, started_here = value
                 server_pending = False
@@ -513,6 +565,8 @@ def gui(args):
     root.protocol("WM_DELETE_WINDOW", close)
     poll()
     refresh_server()
+    if getattr(sys, "frozen", False):
+        check_for_update()
     if args.gui_smoke_test:
         if args.report:
             core.atomic_write(args.report, json.dumps({"gui": True}))
@@ -557,7 +611,10 @@ def main():
                         help="Control the installed server without opening the window")
     parser.add_argument("--gui-smoke-test", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--gui-cycle-test", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--launcher-only-update", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
+    if args.launcher_only_update:
+        args.cli = True
     if args.server_action:
         try:
             record = launcher.installed(args.root)

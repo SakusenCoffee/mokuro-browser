@@ -163,6 +163,14 @@ Existing pairing is preserved. The server-control feature uses a fixed browser
 extension ID: in Chrome/Chromium, remove the older unpacked Local Mokuro entry
 and use **Load unpacked** on the exported extension folder again, then pair once
 more. In Firefox, load the updated temporary add-on again.
+
+When a newer GitHub Release has a matching desktop installer, the launcher also
+shows an **Update launcher** button. It downloads the release asset, verifies
+its expected download size, then updates the local launcher and companion
+server. This path deliberately does **not** export, reload, or alter the browser
+extension; use the normal **Install / update** button when you want an extension
+update too. The update check is only made by downloaded launcher builds and an
+offline check simply leaves the button hidden.
 If a custom Mokuro environment isn't discovered automatically, run the installer
 from an activated environment, or use its `--cli --python PATH` option.
 

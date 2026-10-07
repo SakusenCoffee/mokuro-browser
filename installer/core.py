@@ -265,13 +265,15 @@ from mokuro_browser.ocr.manga_page_ocr import MangaPageOcr
 MangaPageOcr(disable_ocr=True)
 helper = sys.argv[1] or None
 registered = sys.argv[2] == "1"
+export_browser_extension = sys.argv[3] == "1"
 host = install_native_host(helper=helper, register=registered)
-print(json.dumps({"version":__version__,"extension":str(export_extension()),"pairing_code":pairing_token(),
+print(json.dumps({"version":__version__,"extension":str(export_extension()) if export_browser_extension else None,"pairing_code":pairing_token(),
                   "native_host":str(host),"native_host_registered":registered}))
 '''
 
 def install(uv, wheel, *, root=None, bin_dir=None, reuse=True, python=None,
-            autostart=False, modify_path=True, state_dir=None, home=None, native_host=None, log=print):
+            autostart=False, modify_path=True, state_dir=None, home=None, native_host=None,
+            export_browser_extension=True, log=print):
     root, bin_dir = Path(root or default_root()).absolute(), Path(bin_dir or default_bin()).absolute()
     if state_dir and autostart:
         raise ValueError("Isolated test state requires --no-autostart.")
@@ -314,7 +316,7 @@ def install(uv, wheel, *, root=None, bin_dir=None, reuse=True, python=None,
             # State-isolated tests install the helper but never touch real
             # browser registration folders on the developer's machine.
             result = json.loads(run([interpreter, "-c", SETUP, str(native_host or ""),
-                                     "0" if state_dir else "1"], quiet=True).strip().splitlines()[-1])
+                                     "0" if state_dir else "1", "1" if export_browser_extension else "0"], quiet=True).strip().splitlines()[-1])
         except BaseException:
             shutil.rmtree(venv, ignore_errors=True)
             raise
