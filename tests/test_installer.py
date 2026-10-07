@@ -7,12 +7,15 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import inspect
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from installer import core
 
 class InstallerTests(unittest.TestCase):
+    def test_login_startup_is_opt_in(self):
+        self.assertFalse(inspect.signature(core.install).parameters["autostart"].default)
     @unittest.skipUnless(os.name == "nt", "Native Windows registry PATH test")
     def test_windows_path_addition_is_idempotent_and_removal_keeps_user_edits(self):
         import winreg

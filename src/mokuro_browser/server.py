@@ -193,6 +193,13 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized():
             return
         route = urlsplit(self.path)
+        if route.path == "/shutdown":
+            # Respond before requesting shutdown so the native-messaging host
+            # can reliably distinguish an accepted stop from a dead server.
+            self.respond(202, {"status": "stopping"})
+            threading.Thread(target=self.server.shutdown, daemon=True,
+                             name="mokuro-server-shutdown").start()
+            return
         if route.path != "/jobs":
             self.respond(404, {"error": "Unknown route."})
             return

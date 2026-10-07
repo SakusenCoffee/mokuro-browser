@@ -110,6 +110,19 @@ class ServerTests(unittest.TestCase):
     def test_missing_job_is_404(self):
         self.assertEqual(self.request("/jobs/"+"0"*32)[0], 404)
 
+    def test_authenticated_shutdown_is_accepted(self):
+        http = server.make_server("test-token-with-at-least-32-characters", 0, self.engine)
+        thread = threading.Thread(target=http.serve_forever, daemon=True)
+        thread.start()
+        base = f"http://127.0.0.1:{http.server_port}"
+        request = Request(base + "/shutdown", data=b"", method="POST",
+                          headers={"Authorization": f"Bearer {http.token}"})
+        with urlopen(request, timeout=5) as response:
+            self.assertEqual(response.status, 202)
+        thread.join(timeout=3)
+        self.assertFalse(thread.is_alive())
+        http.server_close()
+
     def test_rescan_bypasses_cached_ocr_without_reloading_model(self):
         counts = {"loads": 0, "scans": 0}
         def loader():

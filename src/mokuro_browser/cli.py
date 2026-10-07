@@ -6,6 +6,7 @@ import subprocess
 import sys
 from . import __version__
 from .config import atomic_write, data_dir, pairing_token
+from .native_host import install_native_host
 
 EXTENSION_FILES = ("manifest.json", "background.js", "content.js", "page-cache.js",
                    "ocr-result.js", "popup.html", "popup.js", "popup.css")
@@ -47,13 +48,14 @@ def main(argv=None):
         elif args.command == "setup":
             token = pairing_token()
             print(f"Extension folder: {export_extension(args.extension_dir)}")
+            print(f"Browser server control: {install_native_host()}")
             print("Pairing code (paste into the extension popup):")
             print(token)
             if args.autostart:
                 from .startup import install
                 print(f"Automatic startup installed: {install()}")
             else:
-                print("Start the server with: mokuro-browser serve")
+                print("Use the Server button in the Local Mokuro extension to start OCR.")
         else:
             from .startup import install, remove
             if args.action == "install":

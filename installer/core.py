@@ -256,16 +256,22 @@ def install_lock(root):
 
 SETUP = '''
 import json
+import sys
 from mokuro_browser import __version__
 from mokuro_browser.cli import export_extension
 from mokuro_browser.config import pairing_token
+from mokuro_browser.native_host import install_native_host
 from mokuro_browser.ocr.manga_page_ocr import MangaPageOcr
 MangaPageOcr(disable_ocr=True)
-print(json.dumps({"version":__version__,"extension":str(export_extension()),"pairing_code":pairing_token()}))
+helper = sys.argv[1] or None
+registered = sys.argv[2] == "1"
+host = install_native_host(helper=helper, register=registered)
+print(json.dumps({"version":__version__,"extension":str(export_extension()),"pairing_code":pairing_token(),
+                  "native_host":str(host),"native_host_registered":registered}))
 '''
 
 def install(uv, wheel, *, root=None, bin_dir=None, reuse=True, python=None,
-            autostart=True, modify_path=True, state_dir=None, home=None, log=print):
+            autostart=False, modify_path=True, state_dir=None, home=None, native_host=None, log=print):
     root, bin_dir = Path(root or default_root()).absolute(), Path(bin_dir or default_bin()).absolute()
     if state_dir and autostart:
         raise ValueError("Isolated test state requires --no-autostart.")
@@ -305,7 +311,10 @@ def install(uv, wheel, *, root=None, bin_dir=None, reuse=True, python=None,
             else:
                 run([uv, "pip", "install", "--python", interpreter, "--torch-backend", "cpu", wheel])
             log("Checking the installed OCR and preparing the extension…")
-            result = json.loads(run([interpreter, "-c", SETUP], quiet=True).strip().splitlines()[-1])
+            # State-isolated tests install the helper but never touch real
+            # browser registration folders on the developer's machine.
+            result = json.loads(run([interpreter, "-c", SETUP, str(native_host or ""),
+                                     "0" if state_dir else "1"], quiet=True).strip().splitlines()[-1])
         except BaseException:
             shutil.rmtree(venv, ignore_errors=True)
             raise
@@ -345,6 +354,7 @@ def install(uv, wheel, *, root=None, bin_dir=None, reuse=True, python=None,
                 log(f"Automatic startup could not be enabled: {error}")
                 result["startup_error"] = str(error)
         elif previous and previous.get("autostart"):
+            log("Removing login startup; use the extension's Server button instead…")
             run([env_python(Path(record["startup_environment"])), "-m", "mokuro_browser", "autostart", "remove"])
             record["autostart"] = False
             atomic_write(root / "install.json", json.dumps(record, indent=2))
@@ -362,6 +372,13 @@ def uninstall(*, root=None, log=print):
             environment["MOKURO_BROWSER_HOME"] = record["state_dir"]
         if record["autostart"]:
             Runner(log, environment)([env_python(Path(record.get("startup_environment", record["environment"]))), "-m", "mokuro_browser", "autostart", "remove"])
+        try:
+            Runner(log, environment)([env_python(Path(record["environment"])), "-c",
+                                      "from mokuro_browser.native_host import uninstall_native_host; uninstall_native_host()"])
+        except (OSError, RuntimeError):
+            # The managed environment may already be damaged. Continue with
+            # removing the installation while preserving pairing data.
+            pass
         path = Path(record["launcher"])
         if path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest() == record["launcher_sha256"]:
             if record["launcher_backup"] is not None:

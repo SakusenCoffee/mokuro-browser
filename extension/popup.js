@@ -1,6 +1,7 @@
 const status = document.querySelector("#status");
 const error = document.querySelector("#error");
 const auto = document.querySelector("#auto");
+const server = document.querySelector("#server");
 function showAuto(enabled) {
   auto.setAttribute("aria-pressed", String(enabled));
   auto.textContent = `Auto-scan manga: ${enabled ? "On" : "Off"}`;
@@ -28,8 +29,40 @@ function showHealth(reply) {
     : reply.error;
   if (!reply.ok) document.querySelector("#pairing").open = true;
 }
-chrome.runtime.sendMessage({type: "HEALTH"}).then(showHealth)
-  .catch(() => { status.textContent = "Reload the extension, then try again."; });
+function showServer(data) {
+  const running = data.running === true;
+  server.setAttribute("aria-pressed", String(running));
+  server.textContent = `Server: ${running ? "On" : "Off"}`;
+  if (!running) status.textContent = "● Local server is off";
+}
+async function refreshServer() {
+  server.disabled = true;
+  try {
+    const reply = await chrome.runtime.sendMessage({type: "SERVER_STATUS"});
+    if (!reply.ok) throw new Error(reply.error);
+    showServer(reply.data);
+    if (reply.data.running) {
+      const health = await chrome.runtime.sendMessage({type: "HEALTH"});
+      showHealth(health);
+    }
+  } catch (failure) {
+    status.textContent = failure.message;
+    server.textContent = "Server: unavailable";
+  } finally { server.disabled = false; }
+}
+server.onclick = async () => {
+  error.textContent = "";
+  server.disabled = true;
+  try {
+    const action = server.getAttribute("aria-pressed") === "true" ? "stop" : "start";
+    const reply = await chrome.runtime.sendMessage({type: "SERVER_CONTROL", action});
+    if (!reply.ok) throw new Error(reply.error);
+    showServer(reply.data);
+    if (reply.data.running) showHealth(await chrome.runtime.sendMessage({type: "HEALTH"}));
+  } catch (failure) { error.textContent = failure.message; }
+  finally { server.disabled = false; }
+};
+refreshServer();
 document.querySelector("#pair").onclick = async () => {
   error.textContent = "";
   const button = document.querySelector("#pair");

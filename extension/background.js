@@ -2,6 +2,7 @@
 // script in an MV3 background page, where importScripts does not exist.
 if (typeof importScripts === "function") importScripts("ocr-result.js", "page-cache.js");
 const SERVER_URL = "http://127.0.0.1:8766";
+const NATIVE_HOST = "com.sakusencoffee.mokuro_browser";
 const busy = new Set();
 const generations = new Map();
 const pause = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
@@ -15,7 +16,7 @@ async function api(path, options = {}, pairingCode) {
       ...options, headers: {...options.headers, Authorization: `Bearer ${token}`},
       signal: AbortSignal.timeout(25000)
     });
-  } catch { throw new Error("Local Mokuro server is offline. Run: mokuro-browser serve"); }
+  } catch { throw new Error("Local Mokuro server is off. Open Local Mokuro and turn the server on."); }
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || `Server error ${response.status}`);
   return result;
@@ -106,6 +107,17 @@ async function checkPage(tabId, target, scan = true) {
 }
 
 async function launch(message, sender) {
+  if (message.type === "SERVER_STATUS" || message.type === "SERVER_CONTROL") {
+    const action = message.type === "SERVER_STATUS" ? "status" : message.action;
+    if (!["status", "start", "stop"].includes(action)) throw new Error("Unsupported local server action.");
+    try {
+      const result = await chrome.runtime.sendNativeMessage(NATIVE_HOST, {action});
+      if (!result?.ok) throw new Error(result?.error || "The local server control did not respond.");
+      return result;
+    } catch (error) {
+      throw new Error("Local server control is unavailable. Run Mokuro Browser Setup again, then reload the extension. " + error.message);
+    }
+  }
   if (message.type === "PAIR") {
     if (sender.tab) throw new Error("Pair from the extension popup.");
     const token = String(message.token || "").trim();

@@ -51,11 +51,21 @@ def main():
     if python_license.is_file():
         shutil.copyfile(python_license, licenses / "PYTHON-LICENSE.txt")
     output = ROOT / "build/installer-dist"
+    native_output = ROOT / "build/native-host-dist"
+    native_options = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onefile",
+                      "--name", "MokuroBrowserNativeHost", "--distpath", str(native_output),
+                      "--workpath", str(ROOT / "build/native-host-pyinstaller"), "--specpath", str(ROOT / "build"),
+                      "--paths", str(ROOT / "src"), str(ROOT / "tools/native_host_entry.py")]
+    if args.codesign_identity:
+        native_options.extend(["--codesign-identity", args.codesign_identity])
+    subprocess.run(native_options, cwd=ROOT, check=True)
+    native_host = native_output / ("MokuroBrowserNativeHost.exe" if os.name == "nt" else "MokuroBrowserNativeHost")
     options = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onefile",
                "--name", "MokuroBrowserSetup", "--distpath", str(output),
                "--workpath", str(ROOT / "build/pyinstaller"), "--specpath", str(ROOT / "build"),
-               "--paths", str(ROOT), "--add-data", f"{wheel}:payload",
-               "--add-data", f"{licenses}:payload/licenses", "--add-binary", f"{binary}:payload"]
+               "--paths", str(ROOT), "--add-data", f"{wheel}{os.pathsep}payload",
+               "--add-data", f"{licenses}{os.pathsep}payload/licenses", "--add-binary", f"{binary}{os.pathsep}payload",
+               "--add-binary", f"{native_host}{os.pathsep}payload"]
     if sys.platform in ("win32", "darwin") and not args.console:
         options.append("--windowed")
     if args.codesign_identity:
@@ -78,7 +88,7 @@ def main():
         artifact = destination / f"MokuroBrowserSetup-linux-{arch}.tar.gz"
         with tarfile.open(artifact, "w:gz") as archive:
             archive.add(executable, arcname="MokuroBrowserSetup")
-    (ROOT / "build/installer-build.json").write_text(json.dumps({"executable": str(executable), "artifact": str(artifact)}))
+    (ROOT / "build/installer-build.json").write_text(json.dumps({"executable": str(executable), "artifact": str(artifact), "native_host": str(native_host)}))
     print(f"Installer: {artifact}")
 
 if __name__ == "__main__":

@@ -3,6 +3,8 @@
 <body>
   <header><span class="mark">文</span><div><h1>Local Mokuro</h1><p>Read manga with selectable text</p></div></header>
   <div id="status" role="status">Checking local server…</div>
+  <button id="server" aria-pressed="false" disabled>Server: checking…</button>
+  <p class="auto-hint">Starts and stops the local OCR server. It stays off until you turn it on.</p>
   <details id="pairing"><summary>Pair with this computer</summary>
     <p class="hint">Paste the code shown by <code>mokuro-browser setup</code>.</p>
     <label for="pairing-code">Pairing code</label>

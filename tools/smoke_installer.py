@@ -20,7 +20,7 @@ def main():
         root = Path(directory)
         installed, bins, state = root / "installation", root / "bin with spaces", root / "state"
         report = root / "report.json"
-        arguments = [*prefix, "--cli", "--fresh", "--no-autostart", "--no-path",
+        arguments = [*prefix, "--cli", "--fresh", "--no-path",
                      "--root", str(installed), "--bin-dir", str(bins),
                      "--state-dir", str(state), "--report", str(report)]
         subprocess.run(arguments, check=True)
@@ -28,6 +28,8 @@ def main():
         assert len(result["pairing_code"]) >= 32
         assert (Path(result["extension"]) / "manifest.json").is_file()
         assert Path(result["launcher"]).is_file()
+        assert Path(result["native_host"]).is_file()
+        assert not result["autostart"]
         check = subprocess.run([result["python"], "-m", "mokuro_browser", "--version"], check=True, capture_output=True, text=True)
         assert check.stdout.strip() == result["version"]
         command = [result["launcher"], "--version"]

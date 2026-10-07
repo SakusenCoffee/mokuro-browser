@@ -23,17 +23,18 @@ def payload():
         if not location:
             raise RuntimeError("uv is missing from the installer payload.")
         uv = Path(location)
-    return uv, wheels[0]
+    native_host = root / "payload" / ("MokuroBrowserNativeHost.exe" if os.name == "nt" else "MokuroBrowserNativeHost")
+    return uv, wheels[0], native_host if native_host.is_file() else None
 
 def execute(args, log):
     if args.uninstall:
         core.uninstall(root=args.root, log=log)
         return {"removed": True}
-    uv, wheel = payload()
+    uv, wheel, native_host = payload()
     return core.install(uv, wheel, root=args.root, bin_dir=args.bin_dir,
                         reuse=not args.fresh, python=args.python,
-                        autostart=not args.no_autostart, modify_path=not args.no_path,
-                        state_dir=args.state_dir, log=log)
+                        autostart=args.autostart, modify_path=not args.no_path,
+                        state_dir=args.state_dir, native_host=native_host, log=log)
 
 def open_folder(folder):
     if os.name == "nt":
@@ -54,9 +55,7 @@ def gui(args):
     ttk.Label(frame, text="Mokuro Browser", font=("", 22)).pack(anchor="w")
     ttk.Label(frame, text="Install Python, Mokuro and the local OCR server for this user.\nInternet is needed for downloads. No administrator access is required.").pack(anchor="w", pady=(8, 15))
     reuse = tk.BooleanVar(value=not args.fresh)
-    startup = tk.BooleanVar(value=not args.no_autostart)
     ttk.Checkbutton(frame, text="Reuse an existing Mokuro / GPU environment when available", variable=reuse).pack(anchor="w")
-    ttk.Checkbutton(frame, text="Start the server automatically at login", variable=startup).pack(anchor="w")
     buttons = ttk.Frame(frame)
     buttons.pack(fill="x", pady=12)
     output = ScrolledText(frame, height=13, wrap="word", state="disabled")
@@ -78,7 +77,7 @@ def gui(args):
         progress.start()
         install_button.configure(state="disabled")
         remove_button.configure(state="disabled")
-        args.uninstall, args.fresh, args.no_autostart = removing, not reuse.get(), not startup.get()
+        args.uninstall, args.fresh = removing, not reuse.get()
         def work():
             try:
                 messages.put(("done", execute(args, lambda line: messages.put(("log", line)))))
@@ -110,8 +109,7 @@ def gui(args):
                 write("\nNext: load the extension folder in your browser, then paste this pairing code into the extension popup.")
                 write("Extension folder: " + value["extension"])
                 write("Pairing code: " + value["pairing_code"])
-                if not value["autostart"]:
-                    write("Start the server in a new terminal: mokuro-browser serve")
+                write("Use the Server button in the Local Mokuro extension to start OCR when you need it.")
                 def copy():
                     root.clipboard_clear()
                     root.clipboard_append(value["pairing_code"])
@@ -133,7 +131,8 @@ def main():
     parser.add_argument("--cli", action="store_true", help="Run without the graphical interface")
     parser.add_argument("--uninstall", action="store_true")
     parser.add_argument("--fresh", action="store_true", help="Use private Python and CPU dependencies")
-    parser.add_argument("--no-autostart", action="store_true")
+    parser.add_argument("--autostart", action="store_true", help="Also start the server automatically at login")
+    parser.add_argument("--no-autostart", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--no-path", action="store_true")
     parser.add_argument("--python", type=Path, help="Reuse Mokuro from this interpreter")
     parser.add_argument("--root", type=Path)
