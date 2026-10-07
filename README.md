@@ -155,7 +155,8 @@ python tools/package_extension.py
 
 CI runs unit tests and package builds on Linux, Windows and macOS. Startup
 configuration tests cover paths with spaces, quoting and per-user credentials;
-they do not install real login jobs on hosted CI machines.
+CI also validates the files with native systemd/plist tools. On Windows it
+creates, queries and deletes a temporary test task without running the server.
 
 `tests/browser-qa.mjs` is an optional full Chromium/Yomitan/GPU regression check.
 It needs a separate debug-enabled Chromium profile on port 9235 with this

@@ -2,3 +2,4 @@ recursive-include extension *.js *.json *.html *.css
 exclude extension/config.js
 include tests/*.mjs
 include tools/package_extension.py
+include tools/check_native_startup.py
