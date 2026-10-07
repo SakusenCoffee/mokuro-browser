@@ -85,10 +85,11 @@ def host_manifests(host_path):
 
 def write_manifests(host_path, roots=None, platform=None):
     """Install manifests for Chrome-family browsers and Firefox, per user."""
-    roots = roots if roots is not None else native_manifest_roots(platform=platform)
+    supplied_roots = roots is not None
+    roots = roots if supplied_roots else native_manifest_roots(platform=platform)
     manifests = host_manifests(host_path)
     written = []
-    if (platform or sys.platform) == "win32":
+    if not supplied_roots and (platform or sys.platform) == "win32":
         import winreg
         registry = {
             "chrome": ("Software\\Google\\Chrome\\NativeMessagingHosts\\",),
@@ -116,8 +117,9 @@ def write_manifests(host_path, roots=None, platform=None):
 
 
 def remove_manifests(roots=None, platform=None):
-    roots = roots if roots is not None else native_manifest_roots(platform=platform)
-    if (platform or sys.platform) == "win32":
+    supplied_roots = roots is not None
+    roots = roots if supplied_roots else native_manifest_roots(platform=platform)
+    if not supplied_roots and (platform or sys.platform) == "win32":
         import winreg
         for key in ("Software\\Google\\Chrome\\NativeMessagingHosts\\",
                     "Software\\Chromium\\NativeMessagingHosts\\",
