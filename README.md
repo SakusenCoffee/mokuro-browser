@@ -112,6 +112,14 @@ Pairing codes are preserved across updates. Show yours again with:
 mokuro-browser pair
 ```
 
+Prebuilt packages are also available on the
+[Releases page](https://github.com/SakusenCoffee/mokuro-browser/releases).
+Download the `.whl` file and install it in your Mokuro environment with
+`python -m pip install mokuro_browser-0.1.0-py3-none-any.whl`, then run
+`mokuro-browser setup`. The wheel includes both the server and extension.
+The separate extension ZIP is for people updating only the browser component;
+it still needs the companion server and pairing.
+
 If the server is offline, run `mokuro-browser serve` and inspect its terminal
 output. Only one server may use port **8766** at a time. Use the Python environment
 where your Mokuro/GPU installation works. This package does not install GPU
@@ -142,6 +150,7 @@ python -m unittest discover -s tests -v
 node tests/test-pairing.mjs
 python -m pip install build
 python -m build
+python tools/package_extension.py
 ```
 
 CI runs unit tests and package builds on Linux, Windows and macOS. Startup

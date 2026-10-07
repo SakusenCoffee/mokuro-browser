@@ -1,0 +1,22 @@
+"""Build an unpaired extension ZIP containing only public assets and licenses."""
+from pathlib import Path
+import json
+import zipfile
+
+ROOT = Path(__file__).resolve().parents[1]
+FILES = ("manifest.json", "background.js", "content.js", "page-cache.js",
+         "ocr-result.js", "popup.html", "popup.js", "popup.css")
+
+def main():
+    version = json.loads((ROOT / "extension/manifest.json").read_text())["version"]
+    destination = ROOT / "dist" / f"mokuro-browser-extension-{version}.zip"
+    prepared = {name: (ROOT / "extension" / name).read_bytes() for name in FILES}
+    prepared.update({name: (ROOT / name).read_bytes() for name in ("LICENSE", "THIRD_PARTY.md")})
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, contents in prepared.items():
+            archive.writestr(name, contents)
+    print(destination)
+
+if __name__ == "__main__":
+    main()

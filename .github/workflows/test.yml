@@ -1,5 +1,7 @@
 name: Test and package
 on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
 jobs:
   test:
     strategy:
@@ -20,6 +22,7 @@ jobs:
       - run: python -m unittest discover -s tests -v
       - run: python -m mokuro_browser --version
       - run: python -m build
+      - run: python tools/package_extension.py
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
