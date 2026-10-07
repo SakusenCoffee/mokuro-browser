@@ -13,6 +13,33 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from installer import core
 
 class InstallerTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "nt", "Native Windows registry PATH test")
+    def test_windows_path_addition_is_idempotent_and_removal_keeps_user_edits(self):
+        import winreg
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
+            try:
+                original = winreg.QueryValueEx(key, "Path")
+            except FileNotFoundError:
+                original = None
+            try:
+                with tempfile.TemporaryDirectory(prefix="Mokuro PATH 日本語 ") as directory:
+                    bins = Path(directory) / "bin with spaces"
+                    added = core.update_path(bins)
+                    self.assertTrue(added["windows_added"])
+                    self.assertFalse(core.update_path(bins)["windows_added"])
+                    current, kind = winreg.QueryValueEx(key, "Path")
+                    user_entry = str(Path(directory) / "keep user entry")
+                    winreg.SetValueEx(key, "Path", 0, kind, current + ";" + user_entry)
+                    core.remove_path(added, bins)
+                    current = winreg.QueryValueEx(key, "Path")[0].split(";")
+                    self.assertNotIn(str(bins), current)
+                    self.assertIn(user_entry, current)
+            finally:
+                if original is None:
+                    winreg.DeleteValue(key, "Path")
+                else:
+                    winreg.SetValueEx(key, "Path", 0, original[1], original[0])
+
     def test_reuse_preserves_user_gpu_precedence_over_system_cpu_packages(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

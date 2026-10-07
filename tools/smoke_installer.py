@@ -24,6 +24,11 @@ def main():
         assert Path(result["launcher"]).is_file()
         check = subprocess.run([result["python"], "-m", "mokuro_browser", "--version"], check=True, capture_output=True, text=True)
         assert check.stdout.strip() == result["version"]
+        command = [result["launcher"], "--version"]
+        if os.name == "nt":
+            command = ["cmd.exe", "/d", "/c", *command]
+        check = subprocess.run(command, check=True, capture_output=True, text=True, encoding="utf-8")
+        assert check.stdout.strip() == result["version"]
         before = (state / "config/pairing-token").read_bytes()
         # Re-running uses the installed environment and preserves pairing.
         arguments.remove("--fresh")

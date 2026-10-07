@@ -143,7 +143,9 @@ def launcher(python, state_dir=None):
     if os.name == "nt":
         escape = lambda value: str(value).replace("%", "%%")
         prefix = f'set "MOKURO_BROWSER_HOME={escape(state_dir)}"\r\n' if state_dir else ""
-        return f'@echo off\r\n{prefix}"{escape(python)}" -m mokuro_browser %*\r\n'
+        # Batch files are interpreted using cmd's active code page. Select
+        # UTF-8 before commands containing a non-ASCII installation path.
+        return f'@echo off\r\nchcp 65001 >nul\r\nset "PYTHONUTF8=1"\r\n{prefix}"{escape(python)}" -m mokuro_browser %*\r\n'
     prefix = f"export MOKURO_BROWSER_HOME={shlex.quote(str(state_dir))}\n" if state_dir else ""
     return f"#!/bin/sh\n{prefix}exec {shlex.quote(str(python))} -m mokuro_browser \"$@\"\n"
 
