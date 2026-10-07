@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import struct
 import subprocess
+import webbrowser
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
 from platformdirs import user_data_dir
@@ -79,6 +80,17 @@ def request(record, path, value=None):
         except (ValueError, AttributeError):
             detail = str(error)
         raise RuntimeError(detail) from error
+
+
+def dashboard_url(record):
+    config = host_config(record)
+    # A fragment is intentionally client-side: it does not reach server logs,
+    # proxies, or the HTTP request for the dashboard document.
+    return f"http://127.0.0.1:{config['port']}/dashboard#{pairing_code(record)}"
+
+
+def open_dashboard(record):
+    webbrowser.open(dashboard_url(record))
 
 
 def control(record, action):

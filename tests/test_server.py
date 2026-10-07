@@ -132,6 +132,15 @@ class ServerTests(unittest.TestCase):
             self.assertEqual(headers["Access-Control-Allow-Origin"], origin)
             self.assertEqual(self.request("/jobs", headers={"Origin": origin}, method="OPTIONS")[0], 204)
 
+    def test_local_dashboard_contains_no_reading_data_or_token(self):
+        request = Request(self.base + "/dashboard")
+        with urlopen(request, timeout=5) as response:
+            page = response.read().decode()
+            self.assertEqual(response.status, 200)
+        self.assertIn("Live feed", page)
+        self.assertIn("location.hash", page)
+        self.assertNotIn(self.http.token, page)
+
     def test_invalid_host_is_rejected(self):
         self.assertEqual(self.request("/health", headers={"Host": "evil.example"})[0], 403)
 

@@ -52,20 +52,39 @@ def gui(args):
     from tkinter.scrolledtext import ScrolledText
     root = tk.Tk()
     root.title("Mokuro Browser")
+    root.configure(bg="#101919")
     assets = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
     icon = assets / ("payload/icon-128.png" if getattr(sys, "frozen", False) else "extension/icon-128.png")
     root.app_icon = tk.PhotoImage(file=str(icon))
     root.iconphoto(True, root.app_icon)
-    root.geometry("900x720")
+    root.geometry("980x760")
     root.minsize(760, 600)
+    style = ttk.Style(root)
+    style.theme_use("clam")
+    style.configure(".", background="#101919", foreground="#e8f1ee", fieldbackground="#1b2a28", bordercolor="#385850",
+                    font=("Segoe UI", 10))
+    style.configure("TFrame", background="#101919")
+    style.configure("TLabel", background="#101919", foreground="#d7e7e1")
+    style.configure("Title.TLabel", font=("Segoe UI", 26, "bold"), foreground="#ffffff")
+    style.configure("Subtle.TLabel", foreground="#a6beb6")
+    style.configure("TButton", padding=(13, 8), background="#25473f", foreground="#f4fbf8", bordercolor="#5eaa91")
+    style.map("TButton", background=[("active", "#367864"), ("disabled", "#26332f")], foreground=[("disabled", "#71847e")])
+    style.configure("TCheckbutton", background="#101919", foreground="#d7e7e1")
+    style.map("TCheckbutton", background=[("active", "#101919")])
+    style.configure("TNotebook", background="#101919", borderwidth=0)
+    style.configure("TNotebook.Tab", padding=(16, 9), background="#1a2926", foreground="#abc1ba")
+    style.map("TNotebook.Tab", background=[("selected", "#2a5147")], foreground=[("selected", "#ffffff")])
+    style.configure("Treeview", background="#172522", fieldbackground="#172522", foreground="#e6f0ec", rowheight=31)
+    style.configure("Treeview.Heading", background="#29443e", foreground="#eff8f4", relief="flat")
+    style.map("Treeview", background=[("selected", "#356c5c")], foreground=[("selected", "#ffffff")])
     notebook = ttk.Notebook(root)
     notebook.pack(fill="both", expand=True, padx=12, pady=12)
     frame = ttk.Frame(notebook, padding=20)
     history_frame = ttk.Frame(notebook, padding=20)
     notebook.add(frame, text="Server")
     notebook.add(history_frame, text="Reading history")
-    ttk.Label(frame, text="Mokuro Browser", font=("", 22)).pack(anchor="w")
-    ttk.Label(frame, text="Launch this app whenever you want to read manga. The local server runs while this window is open.").pack(anchor="w", pady=(8, 12))
+    ttk.Label(frame, text="Mokuro Browser", style="Title.TLabel").pack(anchor="w")
+    ttk.Label(frame, text="Your private manga OCR control room. The server runs while this window is open.", style="Subtle.TLabel").pack(anchor="w", pady=(4, 16))
     reuse = tk.BooleanVar(value=not args.fresh)
     ttk.Checkbutton(frame, text="Reuse an existing Mokuro / GPU environment when available", variable=reuse).pack(anchor="w")
     gpu_enabled = tk.BooleanVar(value=True)
@@ -73,11 +92,11 @@ def gui(args):
                                 command=lambda: change_gpu())
     gpu_toggle.pack(anchor="w", pady=(8, 0))
     gpu_toggle.configure(state="disabled")
-    ttk.Label(frame, text="Turning this off uses CPU. Changing it restarts the server and reloads the models.").pack(anchor="w")
+    ttk.Label(frame, text="Turning this off uses CPU. Changing it restarts the server and reloads the models.", style="Subtle.TLabel").pack(anchor="w")
     server_status = tk.StringVar(value="Checking installation…")
-    ttk.Label(frame, textvariable=server_status).pack(anchor="w", pady=(10, 4))
+    ttk.Label(frame, textvariable=server_status, font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(14, 4))
     load_status = tk.StringVar(value="System load · CPU —   GPU —")
-    ttk.Label(frame, textvariable=load_status).pack(anchor="w", pady=(0, 8))
+    ttk.Label(frame, textvariable=load_status, style="Subtle.TLabel").pack(anchor="w", pady=(0, 10))
     code = tk.StringVar()
     code_row = ttk.Frame(frame)
     code_row.pack(fill="x", pady=(0, 8))
@@ -89,9 +108,21 @@ def gui(args):
             root.clipboard_append(code.get())
     ttk.Button(code_row, text="Copy", command=copy_code).pack(side="left")
     buttons = ttk.Frame(frame)
-    buttons.pack(fill="x", pady=12)
-    output = ScrolledText(frame, height=13, wrap="word", state="disabled")
+    buttons.pack(fill="x", pady=(8, 12))
+    ttk.Label(frame, text="Activity logs", font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(2, 5))
+    log_tabs = ttk.Notebook(frame)
+    log_tabs.pack(fill="both", expand=True)
+    setup_log_frame = ttk.Frame(log_tabs, padding=1)
+    server_log_frame = ttk.Frame(log_tabs, padding=1)
+    log_tabs.add(setup_log_frame, text="Setup activity")
+    log_tabs.add(server_log_frame, text="Server log")
+    log_tabs.select(server_log_frame)
+    output = ScrolledText(setup_log_frame, height=12, wrap="word", state="disabled", bg="#121d1b", fg="#dbe9e4",
+                          insertbackground="#e8f1ee", relief="flat", padx=12, pady=10)
     output.pack(fill="both", expand=True)
+    server_output = ScrolledText(server_log_frame, height=12, wrap="word", state="disabled", bg="#121d1b", fg="#dbe9e4",
+                                 insertbackground="#e8f1ee", relief="flat", padx=12, pady=10)
+    server_output.pack(fill="both", expand=True)
     actions = ttk.Frame(frame)
     actions.pack(fill="x", pady=(10, 0))
     messages = queue.Queue()
@@ -249,12 +280,27 @@ def gui(args):
                 messages.put(("server_error", str(error)))
         threading.Thread(target=work, daemon=True).start()
     progress = ttk.Progressbar(frame, mode="indeterminate")
-    progress.pack(fill="x", before=output, pady=(0, 8))
     def write(text):
         output.configure(state="normal")
         output.insert("end", text + "\n")
         output.see("end")
         output.configure(state="disabled")
+    server_log_text = None
+    def refresh_server_log():
+        nonlocal server_log_text
+        if installed_record:
+            try:
+                path = Path(launcher.host_config(installed_record).get("log_file", ""))
+                text = path.read_text(encoding="utf-8", errors="replace")[-30000:] if path.is_file() else "The server log will appear here after it starts."
+            except (OSError, ValueError, KeyError):
+                text = "The server log is unavailable."
+            if text != server_log_text:
+                server_log_text = text
+                server_output.configure(state="normal")
+                server_output.delete("1.0", "end")
+                server_output.insert("end", text)
+                server_output.see("end")
+                server_output.configure(state="disabled")
     def show_installation(record):
         nonlocal installed_record
         installed_record = record
@@ -286,6 +332,7 @@ def gui(args):
             return
         running = True
         server_generation += 1
+        progress.pack(fill="x", before=log_tabs, pady=(0, 8))
         progress.start()
         install_button.configure(state="disabled")
         remove_button.configure(state="disabled")
@@ -309,6 +356,9 @@ def gui(args):
         "stop" if server_button.cget("text") == "Stop server" else "start"))
     server_button.pack(side="left", padx=10)
     server_button.configure(state="disabled")
+    dashboard_button = ttk.Button(buttons, text="Open live reader", command=lambda: launcher.open_dashboard(installed_record))
+    dashboard_button.pack(side="right")
+    dashboard_button.configure(state="disabled")
     def poll():
         nonlocal running, owned_server, server_pending, installed_record, history_pending, history_total_lines, observe_pending
         while not messages.empty():
@@ -327,6 +377,7 @@ def gui(args):
                 show_server(result)
                 server_button.configure(text="Stop server" if active else "Start server", state="normal")
                 gpu_toggle.configure(state="normal")
+                dashboard_button.configure(state="normal" if active else "disabled")
                 refresh_history()
                 continue
             if kind == "server_error":
@@ -345,6 +396,7 @@ def gui(args):
                         owned_server = False
                     show_server(result)
                     server_button.configure(text="Stop server" if active else "Start server", state="normal")
+                    dashboard_button.configure(state="normal" if active else "disabled")
                 continue
             if kind == "history":
                 history_pending = False
@@ -398,6 +450,7 @@ def gui(args):
                 continue
             running = False
             progress.stop()
+            progress.pack_forget()
             install_button.configure(state="normal")
             remove_button.configure(state="normal")
             for widget in actions.winfo_children():
@@ -411,6 +464,7 @@ def gui(args):
                 code.set("")
                 server_status.set("Not installed")
                 server_button.configure(state="disabled")
+                dashboard_button.configure(state="disabled")
                 gpu_toggle.configure(state="disabled")
                 write("Uninstall complete.")
             else:
@@ -436,6 +490,7 @@ def gui(args):
             threading.Thread(target=work, daemon=True).start()
         if notebook.select() == str(history_frame):
             refresh_history()
+        refresh_server_log()
         root.after(2500, refresh_server)
     notebook.bind("<<NotebookTabChanged>>", lambda event: refresh_history() if notebook.select() == str(history_frame) else None)
     def close():

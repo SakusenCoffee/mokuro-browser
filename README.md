@@ -250,6 +250,13 @@ every minute and when you open the popup. The pairing code stays saved and fills
 the popup's password field when it opens. After updating an unpacked extension,
 reload it in the browser's extensions page and refresh manga tabs for new overlays.
 
+The launcher also has **Open live reader**. It opens a local dashboard that shows
+newly scanned lines as they arrive, with your character, word, kanji, and kana
+totals on the left. The page is served only on your computer; its dashboard
+credential stays in the URL fragment and is never sent in the request for the
+page or written to server logs. The launcher's bottom **Activity logs** area has
+separate setup and server log tabs.
+
 ## Development
 
 ```console
