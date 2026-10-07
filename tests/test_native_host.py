@@ -57,3 +57,10 @@ class NativeHostTests(unittest.TestCase):
         self.assertEqual(command[:3], [sys.executable, "-m", "mokuro_browser"])
         self.assertIn("serve", command)
         self.assertNotIn("/tmp/token", command[:3])
+
+    def test_pair_returns_existing_code_without_replacing_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            token = Path(directory) / "token"
+            token.write_text("a" * 48)
+            self.assertEqual(native_host.pair({"token_file": str(token)}), {"pairing_code": "a" * 48})
+            self.assertEqual(token.read_text(), "a" * 48)

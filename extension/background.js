@@ -7,18 +7,34 @@ const busy = new Set();
 const generations = new Map();
 const pause = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
+async function nativePair() {
+  const result = await chrome.runtime.sendNativeMessage(NATIVE_HOST, {action: "pair"});
+  const token = result?.pairing_code;
+  if (!result?.ok || !/^[A-Za-z0-9_-]{32,128}$/.test(token || "")) {
+    throw new Error("Automatic pairing is unavailable. Copy the code from the Mokuro Browser window.");
+  }
+  return token;
+}
+
 async function api(path, options = {}, pairingCode) {
-  const token = pairingCode || (await chrome.storage.local.get("pairingToken")).pairingToken;
-  if (!token) throw new Error("Paste the pairing code from mokuro-browser setup into this popup first.");
-  let response;
-  try {
-    response = await fetch(SERVER_URL + path, {
-      ...options, headers: {...options.headers, Authorization: `Bearer ${token}`},
-      signal: AbortSignal.timeout(25000)
-    });
-  } catch { throw new Error("Local Mokuro server is off. Open Local Mokuro and turn the server on."); }
+  let token = pairingCode || (await chrome.storage.local.get("pairingToken")).pairingToken;
+  if (!token) token = await nativePair();
+  const request = async value => {
+    try {
+      return await fetch(SERVER_URL + path, {
+        ...options, headers: {...options.headers, Authorization: `Bearer ${value}`},
+        signal: AbortSignal.timeout(25000)
+      });
+    } catch { throw new Error("Local Mokuro server is off. Open the Mokuro Browser app."); }
+  };
+  let response = await request(token);
+  if (response.status === 401 && !pairingCode) {
+    token = await nativePair();
+    response = await request(token);
+  }
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || `Server error ${response.status}`);
+  if (!pairingCode) await chrome.storage.local.set({pairingToken: token});
   return result;
 }
 
@@ -108,6 +124,7 @@ async function checkPage(tabId, target, scan = true) {
 
 async function launch(message, sender) {
   if (message.type === "SERVER_STATUS" || message.type === "SERVER_CONTROL") {
+    if (sender.tab) throw new Error("Control the server from the extension popup.");
     const action = message.type === "SERVER_STATUS" ? "status" : message.action;
     if (!["status", "start", "stop"].includes(action)) throw new Error("Unsupported local server action.");
     try {
@@ -117,6 +134,13 @@ async function launch(message, sender) {
     } catch (error) {
       throw new Error("Local server control is unavailable. Run Mokuro Browser Setup again, then reload the extension. " + error.message);
     }
+  }
+  if (message.type === "AUTO_PAIR") {
+    if (sender.tab) throw new Error("Pair from the extension popup.");
+    const token = await nativePair();
+    const health = await api("/health", {}, token);
+    await chrome.storage.local.set({pairingToken: token});
+    return health;
   }
   if (message.type === "PAIR") {
     if (sender.tab) throw new Error("Pair from the extension popup.");

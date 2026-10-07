@@ -340,7 +340,8 @@ def install(uv, wheel, *, root=None, bin_dir=None, reuse=True, python=None,
                   "launcher": str(path), "launcher_sha256": hashlib.sha256(contents.encode()).hexdigest(),
                   "launcher_backup": backup, "path": path_record, "autostart": bool(previous and previous.get("autostart")),
                   "startup_environment": previous.get("startup_environment", previous["environment"]) if previous else str(venv),
-                  "state_dir": str(state_dir) if state_dir else None, "version": result["version"]}
+                  "state_dir": str(state_dir) if state_dir else None, "version": result["version"],
+                  "native_host": result["native_host"]}
         atomic_write(root / "install.json", json.dumps(record, indent=2))
         result.update(python=str(interpreter), launcher=str(path), root=str(root), autostart=False)
         if autostart:

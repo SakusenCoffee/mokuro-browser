@@ -11,9 +11,25 @@ import inspect
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from installer import core
+from installer import core, launcher
 
 class InstallerTests(unittest.TestCase):
+    def test_previous_install_can_still_stop_its_server_during_upgrade(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "install"
+            environment = root / "envs/old"
+            python = core.env_python(environment)
+            python.parent.mkdir(parents=True)
+            python.write_bytes(b"python")
+            state = Path(directory) / "state"
+            host = state / "data/native-messaging" / (
+                "mokuro-browser-native-host.exe" if os.name == "nt" else "mokuro-browser-native-host")
+            host.parent.mkdir(parents=True)
+            host.write_bytes(b"host")
+            (root / "install.json").write_text(json.dumps({"owner": core.MARKER,
+                "environment": str(environment), "state_dir": str(state), "version": "0.1.3"}))
+            self.assertEqual(launcher.installed(root)["native_host"], str(host))
+
     def test_login_startup_is_opt_in(self):
         self.assertFalse(inspect.signature(core.install).parameters["autostart"].default)
     @unittest.skipUnless(os.name == "nt", "Native Windows registry PATH test")

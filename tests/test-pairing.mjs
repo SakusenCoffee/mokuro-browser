@@ -24,6 +24,7 @@ const context = vm.createContext({
     runtime: {onMessage: event(), onInstalled: event(), sendNativeMessage: async (host, message) => {
       assert.equal(host, 'com.sakusencoffee.mokuro_browser');
       nativeActions.push(message.action);
+      if (message.action === 'pair') return {ok: true, pairing_code: token};
       return {ok: true, running: message.action !== 'stop', health: {model: 'not_loaded'}};
     }},
     tabs: {onActivated: event(), onRemoved: event()},
@@ -36,7 +37,14 @@ assert.equal((await evaluate("launch({type:'SERVER_STATUS'}, {})")).running, tru
 assert.equal((await evaluate("launch({type:'SERVER_CONTROL',action:'stop'}, {})")).running, false);
 await assert.rejects(evaluate("launch({type:'SERVER_CONTROL',action:'anything'}, {})"), /Unsupported local server action/);
 assert.deepEqual(nativeActions, ['status', 'stop']);
-await assert.rejects(evaluate("launch({type:'HEALTH'}, {})"), /pairing code/);
+assert.equal((await evaluate("launch({type:'HEALTH'}, {})")).model, 'ready', 'scan path pairs without opening popup');
+assert.equal(settings.pairingToken, token);
+settings.pairingToken = 'old-pairing-code-with-at-least-32-characters';
+assert.equal((await evaluate("launch({type:'HEALTH'}, {})")).model, 'ready', 'stale code is refreshed');
+assert.equal(settings.pairingToken, token);
+assert.equal((await evaluate("launch({type:'AUTO_PAIR'}, {})")).model, 'ready');
+assert.equal(settings.pairingToken, token);
+delete settings.pairingToken;
 await assert.rejects(evaluate("launch({type:'PAIR',token:'short'}, {})"), /complete pairing/);
 await assert.rejects(evaluate("launch({type:'PAIR',token:'wrong-code-with-at-least-32-characters'}, {})"), /does not match/);
 assert.equal(settings.pairingToken, undefined);

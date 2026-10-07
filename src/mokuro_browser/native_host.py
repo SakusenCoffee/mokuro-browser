@@ -1,6 +1,6 @@
 """Native Messaging host used by the browser's local server switch.
 
-The host deliberately accepts only status, start, and stop.  It never accepts
+The host accepts only status, start, stop, and pair. It never accepts
 an executable name, URL, or arbitrary command from a web page or extension.
 """
 import argparse
@@ -247,6 +247,11 @@ def stop(config):
     raise RuntimeError("The local Mokuro server did not stop. Try again in a moment.")
 
 
+def pair(config):
+    """Give the fixed-ID browser extension its per-user pairing code."""
+    return {"pairing_code": pairing_token(config["token_file"])}
+
+
 def read_message(stream):
     size = stream.read(4)
     if len(size) != 4:
@@ -277,7 +282,7 @@ def main(argv=None):
         if message is None:
             return
         action = message.get("action")
-        handlers = {"status": status, "start": start, "stop": stop}
+        handlers = {"status": status, "start": start, "stop": stop, "pair": pair}
         if action not in handlers:
             raise RuntimeError("Unsupported local server action.")
         write_message(sys.stdout.buffer, {"ok": True, **handlers[action](config)})

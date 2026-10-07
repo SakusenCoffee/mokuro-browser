@@ -42,7 +42,11 @@ async function refreshServer() {
     if (!reply.ok) throw new Error(reply.error);
     showServer(reply.data);
     if (reply.data.running) {
-      const health = await chrome.runtime.sendMessage({type: "HEALTH"});
+      let health = await chrome.runtime.sendMessage({type: "HEALTH"});
+      if (!health.ok) {
+        const paired = await chrome.runtime.sendMessage({type: "AUTO_PAIR"});
+        if (paired.ok) health = paired;
+      }
       showHealth(health);
     }
   } catch (failure) {
@@ -58,7 +62,14 @@ server.onclick = async () => {
     const reply = await chrome.runtime.sendMessage({type: "SERVER_CONTROL", action});
     if (!reply.ok) throw new Error(reply.error);
     showServer(reply.data);
-    if (reply.data.running) showHealth(await chrome.runtime.sendMessage({type: "HEALTH"}));
+    if (reply.data.running) {
+      let health = await chrome.runtime.sendMessage({type: "HEALTH"});
+      if (!health.ok) {
+        const paired = await chrome.runtime.sendMessage({type: "AUTO_PAIR"});
+        if (paired.ok) health = paired;
+      }
+      showHealth(health);
+    }
   } catch (failure) { error.textContent = failure.message; }
   finally { server.disabled = false; }
 };

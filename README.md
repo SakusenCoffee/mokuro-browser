@@ -27,17 +27,16 @@ dependencies and model caches. Scanning happens on your computer.
    | Linux desktop (ARM64), AppImage option | `MokuroBrowserSetup-linux-arm64.AppImage` |
 
 2. Run the `.exe`, or extract the Mac/Linux download and open
-   **MokuroBrowserSetup**. Click **Install / update**. Leave the reuse option
-   checked if you already have a working Mokuro/GPU environment.
-3. Wait for installation to finish. It downloads Python and missing dependencies,
-   installs the server, adds `mokuro-browser` to your user PATH, and prepares the
-   extension. **Open extension folder** and **Copy pairing code** help with the
-   browser steps below. No administrator/root installation is needed.
+   **MokuroBrowserSetup**. On first launch it installs Python and any missing
+   dependencies, prepares the extension, and starts the server. No administrator
+   access is needed.
+3. Leave the app open while reading. Launch the same executable next time to
+   start the server again. The app displays the connect code and has a **Copy**
+   button. **Install / update** is available for repairs and updates.
 
 For the Linux **AppImage** option, allow the downloaded file to run as a program
-in your file manager's Properties, then open it and click **Install / update**.
-It performs the same installation as the `.tar.gz` installer, including PATH,
-extension control, updates and uninstall. It does not start Mokuro at login. No archive extraction is needed.
+in your file manager's Properties, then open it. It installs on first launch
+and starts the server each time it opens. No archive extraction is needed.
 From a terminal, for example:
 
 ```console
@@ -47,8 +46,7 @@ chmod +x MokuroBrowserSetup-linux-x64.AppImage
 
 The AppImage includes its FUSE library. On systems that block FUSE mounts, run
 `./MokuroBrowserSetup-linux-x64.AppImage --appimage-extract-and-run` instead.
-Use the `arm64` file on ARM computers. The AppImage is an installer; the installed
-server stays in your user data folder and can run after you close the installer.
+Use the `arm64` file on ARM computers. Closing the app stops the server it started.
 
 Internet is required for dependency downloads, which can take several minutes.
 The first scan may also download the OCR models. Fresh installations use CPU
@@ -72,9 +70,9 @@ downloads remain unsigned until those accounts are configured.
      This test installation lasts until Firefox closes. A permanent Firefox
      install requires a Mozilla-signed extension; this project is not yet
      published in the add-on stores.
-2. Open the **Local Mokuro** extension popup, paste the pairing code under
-   **Pair with this computer**, click **Connect local server**, then use
-   **Server: On** when you want to scan.
+2. Open the **Local Mokuro** extension popup. It detects the running app and
+   pairs automatically. If automatic pairing fails, copy the connect code from
+   the app window into **Pair with this computer**.
 3. Open a manga webpage and click **Scan manga image**, or turn on
    **Auto-scan manga**. Hover over its text and use your usual Yomitan shortcut.
 
@@ -101,8 +99,9 @@ extension's local **Server** switch; use it instead of keeping a terminal open.
 
 ## Start automatically at login (optional)
 
-The installer leaves login startup disabled. If you prefer Mokuro to start at
-login, run this from the same Python environment:
+The desktop app leaves login startup disabled; open the same executable when
+you want to scan. If you prefer Mokuro to start at login, run this from the
+same Python environment:
 
 ```console
 mokuro-browser autostart install
@@ -158,8 +157,8 @@ page cues; manual scanning is available when it misses a site.
 
 ## Updating and uninstalling
 
-Download and run the latest installer, then click **Install / update** again.
-It prepares and checks a new environment before replacing the command launcher.
+Download and run the latest desktop executable. It detects an older managed
+installation and updates it before starting the server.
 Existing pairing is preserved. The server-control feature uses a fixed browser
 extension ID: in Chrome/Chromium, remove the older unpacked Local Mokuro entry
 and use **Load unpacked** on the exported extension folder again, then pair once
@@ -189,7 +188,7 @@ mokuro-browser pair
 Prebuilt packages are also available on the
 [Releases page](https://github.com/SakusenCoffee/mokuro-browser/releases).
 Download the `.whl` file and install it in your Mokuro environment with
-`python -m pip install mokuro_browser-0.1.3-py3-none-any.whl`, then run
+`python -m pip install mokuro_browser-0.1.4-py3-none-any.whl`, then run
 `mokuro-browser setup`. The wheel includes both the server and extension.
 The separate extension ZIP is for people updating only the browser component;
 it still needs the companion server and pairing.
