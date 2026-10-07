@@ -30,7 +30,7 @@ def main():
         subprocess.run(arguments, check=True)
         assert (state / "config/pairing-token").read_bytes() == before
         updated = json.loads(report.read_text(encoding="utf-8"))
-        origin = subprocess.check_output([updated["python"], "-c", "import mokuro_browser; print(mokuro_browser.__file__)"], text=True).strip()
+        origin = subprocess.check_output([updated["python"], "-X", "utf8", "-c", "import mokuro_browser; print(mokuro_browser.__file__)"], text=True, encoding="utf-8").strip()
         assert Path(origin).is_relative_to(Path(updated["python"]).parents[1])
         subprocess.run([executable, "--cli", "--uninstall", "--root", str(installed)], check=True)
         assert not Path(result["launcher"]).exists()

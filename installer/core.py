@@ -91,10 +91,14 @@ import json, sys, site
 from importlib.metadata import version
 if sys.version_info < (3,10): raise SystemExit(1)
 import mokuro, torch, torchvision, cv2, manga_ocr
+source_sites = site.getsitepackages()+([site.getusersitepackages()] if site.ENABLE_USER_SITE else [])
 print(json.dumps({"python":sys.executable,"mokuro":version("mokuro"),
     "torch":version("torch"),"torchvision":version("torchvision"),
     "gpu":torch.cuda.is_available(),
-    "sites":site.getsitepackages()+([site.getusersitepackages()] if site.ENABLE_USER_SITE else [])}))
+    # Preserve Python's actual precedence, including user GPU wheels ahead of
+    # distribution-provided CPU packages. Merely listing global sites first
+    # changes which Torch import and distribution pip sees in the new env.
+    "sites":[path for path in sys.path if path in source_sites]}))
 '''
 
 def python_candidates(previous=None):

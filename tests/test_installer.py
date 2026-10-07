@@ -13,6 +13,29 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from installer import core
 
 class InstallerTests(unittest.TestCase):
+    def test_reuse_preserves_user_gpu_precedence_over_system_cpu_packages(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cpu, gpu = root / "system", root / "user"
+            for path, version in ((cpu, "2.9.1"), (gpu, "2.11.0+rocm7.2")):
+                path.mkdir()
+                (path / "torch.py").write_text("class cuda:\n @staticmethod\n def is_available(): return True\n")
+                info = path / f"torch-{version}.dist-info"
+                info.mkdir()
+                (info / "METADATA").write_text(f"Name: torch\nVersion: {version}\n")
+            for name in ("mokuro", "torchvision", "cv2", "manga_ocr"):
+                (gpu / f"{name}.py").write_text("")
+            for name, version in (("mokuro", "0.2.2"), ("torchvision", "0.26.0+rocm7.2")):
+                info = gpu / f"{name}-{version}.dist-info"
+                info.mkdir()
+                (info / "METADATA").write_text(f"Name: {name}\nVersion: {version}\n")
+            prefix = (f"import sys,site; sys.path[:0]=[{str(gpu)!r},{str(cpu)!r}]; "
+                      f"site.getsitepackages=lambda:[{str(cpu)!r}]; "
+                      f"site.getusersitepackages=lambda:{str(gpu)!r}; site.ENABLE_USER_SITE=True\n")
+            result = json.loads(subprocess.check_output([sys.executable, "-c", prefix + core.PROBE], text=True))
+            self.assertEqual(result["sites"], [str(gpu), str(cpu)])
+            self.assertEqual(result["torch"], "2.11.0+rocm7.2")
+
     def test_frozen_environment_does_not_leak_python_or_library_paths(self):
         with mock.patch.dict(os.environ, {"PYTHONHOME":"bundle", "PYTHONPATH":"bundle", "LD_LIBRARY_PATH":"bundle", "LD_LIBRARY_PATH_ORIG":"system", "UV_INDEX":"bad", "PIP_INDEX_URL":"bad"}):
             environment = core.child_environment()
