@@ -19,7 +19,9 @@ class NativeHostTests(unittest.TestCase):
             root = Path(directory) / "native"
             manifests = {"chrome": [Path(directory) / "chrome"],
                          "firefox": [Path(directory) / "firefox"]}
-            executable = native_host.install_native_host(root=root, roots=manifests)
+            helper = Path(directory) / ("helper.exe" if os.name == "nt" else "helper")
+            helper.write_bytes(b"test helper")
+            executable = native_host.install_native_host(helper=helper, root=root, roots=manifests)
             self.assertTrue(executable.is_file())
             self.assertTrue(os.access(executable, os.X_OK))
             chrome = json.loads((manifests["chrome"][0] / (native_host.HOST_NAME + ".json")).read_text())
