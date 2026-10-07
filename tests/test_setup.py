@@ -83,6 +83,7 @@ class SetupTests(unittest.TestCase):
             path = Path(directory) / "startup"
             with mock.patch.object(startup.sys, "platform", "linux"), \
                  mock.patch.object(startup, "startup_path", return_value=path), \
+                 mock.patch.object(startup, "command", return_value=["python", "-m", "mokuro_browser", "serve"]), \
                  mock.patch.object(startup.shutil, "which", return_value=None):
                 with self.assertRaisesRegex(RuntimeError, "serve"):
                     startup.install()
