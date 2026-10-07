@@ -1,6 +1,7 @@
 name: Standalone installers
 on:
   push:
+    branches: [main]
     paths: ['installer/**', 'tools/*installer*', 'src/**', 'extension/**', 'pyproject.toml', 'setup.py', '.github/workflows/installers.yml']
   workflow_dispatch:
 permissions:
@@ -30,9 +31,24 @@ jobs:
       - run: python -m pip install 'setuptools>=77,<81' build platformdirs 'pyinstaller>=6.19,<7' uv==0.10.1
       - run: python tools/build_installer.py
       - run: python tools/smoke_installer.py
+      - name: Cache verified AppImage packaging tools
+        if: runner.os == 'Linux'
+        uses: actions/cache@v4
+        with:
+          path: build/appimage-tools
+          key: appimage-tools-${{ matrix.label }}-${{ hashFiles('tools/build_appimage_installer.py') }}
+      - name: Build additional Linux AppImage
+        if: runner.os == 'Linux'
+        run: python tools/build_appimage_installer.py
+      - name: Check AppImage install, update and uninstall without FUSE
+        if: runner.os == 'Linux'
+        run: python tools/smoke_installer.py --executable dist/MokuroBrowserSetup-${{ matrix.label }}.AppImage --extract-and-run
       - name: Check GUI on Linux
         if: runner.os == 'Linux'
         run: xvfb-run -a build/installer-dist/MokuroBrowserSetup --gui-smoke-test
+      - name: Check AppImage GUI without FUSE
+        if: runner.os == 'Linux'
+        run: xvfb-run -a dist/MokuroBrowserSetup-${{ matrix.label }}.AppImage --appimage-extract-and-run --gui-smoke-test
       - name: Check GUI on Windows and macOS
         if: runner.os != 'Linux'
         run: build/installer-dist/MokuroBrowserSetup --gui-smoke-test

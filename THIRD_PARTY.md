@@ -32,3 +32,11 @@ license texts. Their upstream sources are available at
 [Python](https://github.com/python/cpython),
 [Tcl](https://github.com/tcltk/tcl), [Tk](https://github.com/tcltk/tk), and
 [platformdirs](https://github.com/tox-dev/platformdirs).
+
+Linux AppImages additionally embed the official
+[AppImage type2 runtime](https://github.com/AppImage/type2-runtime), under MIT,
+with its statically linked dependencies listed in
+`installer/licenses/APPIMAGE-RUNTIME-LICENSE`. The runtime license and upstream
+source links are included inside the AppImage. Packaging uses
+[appimagetool](https://github.com/AppImage/appimagetool) 1.9.1; downloads of this
+build tool and the runtime are verified against pinned SHA256 checksums.

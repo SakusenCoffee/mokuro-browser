@@ -19,7 +19,10 @@ ROOT = Path(__file__).resolve().parents[1]
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--console", action="store_true", help="Keep a console for local CLI testing")
+    parser.add_argument("--codesign-identity", help="macOS Developer ID Application identity already in the keychain")
     args = parser.parse_args()
+    if args.codesign_identity and sys.platform != "darwin":
+        parser.error("--codesign-identity is only available on macOS")
     payload = ROOT / "build/installer-payload"
     payload.mkdir(parents=True, exist_ok=True)
     version = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"]
@@ -55,6 +58,8 @@ def main():
                "--add-data", f"{licenses}:payload/licenses", "--add-binary", f"{binary}:payload"]
     if sys.platform in ("win32", "darwin") and not args.console:
         options.append("--windowed")
+    if args.codesign_identity:
+        options.extend(["--codesign-identity", args.codesign_identity])
     options.append(str(ROOT / "installer/main.py"))
     subprocess.run(options, cwd=ROOT, check=True)
     arch = "arm64" if platform.machine().lower() in ("arm64", "aarch64") else "x64"

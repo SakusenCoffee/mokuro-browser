@@ -6,3 +6,5 @@ include tools/check_native_startup.py
 recursive-include installer *.py
 recursive-include installer/licenses *
 include tools/*installer*.py
+recursive-include installer/appimage *
+include SIGNING.md

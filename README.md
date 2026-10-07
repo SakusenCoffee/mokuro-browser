@@ -23,6 +23,8 @@ dependencies and model caches. Scanning happens on your computer.
    | Mac with Intel processor | `MokuroBrowserSetup-macos-x64.zip` |
    | Linux desktop (Intel / AMD) | `MokuroBrowserSetup-linux-x64.tar.gz` |
    | Linux desktop (ARM64) | `MokuroBrowserSetup-linux-arm64.tar.gz` |
+   | Linux desktop (Intel / AMD), AppImage option | `MokuroBrowserSetup-linux-x64.AppImage` |
+   | Linux desktop (ARM64), AppImage option | `MokuroBrowserSetup-linux-arm64.AppImage` |
 
 2. Run the `.exe`, or extract the Mac/Linux download and open
    **MokuroBrowserSetup**. Click **Install / update**. Leave the two options
@@ -32,6 +34,22 @@ dependencies and model caches. Scanning happens on your computer.
    extension. **Open extension folder** and **Copy pairing code** help with the
    browser steps below. No administrator/root installation is needed.
 
+For the Linux **AppImage** option, allow the downloaded file to run as a program
+in your file manager's Properties, then open it and click **Install / update**.
+It performs the same installation as the `.tar.gz` installer, including PATH,
+startup, extension export, updates and uninstall. No archive extraction is needed.
+From a terminal, for example:
+
+```console
+chmod +x MokuroBrowserSetup-linux-x64.AppImage
+./MokuroBrowserSetup-linux-x64.AppImage
+```
+
+The AppImage includes its FUSE library. On systems that block FUSE mounts, run
+`./MokuroBrowserSetup-linux-x64.AppImage --appimage-extract-and-run` instead.
+Use the `arm64` file on ARM computers. The AppImage is an installer; the installed
+server stays in your user data folder and can run after you close the installer.
+
 Internet is required for dependency downloads, which can take several minutes.
 The first scan may also download the OCR models. Fresh installations use CPU
 PyTorch; existing compatible Mokuro/GPU installations are reused. Installer
@@ -40,6 +58,9 @@ builds target Windows 10/11 x64, macOS 15+ and Linux desktops with glibc 2.35+
 The installers are currently unsigned; your OS may ask you to confirm opening
 the downloaded application. On macOS this may require **Open Anyway** in
 System Settings → Privacy & Security after the first launch attempt.
+Maintainers can follow [the signing guide](SIGNING.md) to sign Windows builds
+and sign/notarize Mac builds. Signing needs verified publisher accounts; these
+downloads remain unsigned until those accounts are configured.
 
 ## Install the browser extension
 
@@ -163,7 +184,7 @@ mokuro-browser pair
 Prebuilt packages are also available on the
 [Releases page](https://github.com/SakusenCoffee/mokuro-browser/releases).
 Download the `.whl` file and install it in your Mokuro environment with
-`python -m pip install mokuro_browser-0.1.1-py3-none-any.whl`, then run
+`python -m pip install mokuro_browser-0.1.2-py3-none-any.whl`, then run
 `mokuro-browser setup`. The wheel includes both the server and extension.
 The separate extension ZIP is for people updating only the browser component;
 it still needs the companion server and pairing.
@@ -208,6 +229,11 @@ python -m pip install 'setuptools>=77,<81' build platformdirs 'pyinstaller>=6.19
 python tools/build_installer.py
 ```
 
+On Linux, add the AppImage with `python tools/build_appimage_installer.py`.
+It wraps the already built executable and verifies the packaging tools/runtime
+against pinned SHA256 checksums. If upstream replaces the continuous runtime,
+update and review its pinned checksum; an unexpected download is rejected.
+
 The build embeds the public companion wheel and uv binary. The installer itself
 does not depend on a Python installation on the user's computer. Its workflow
 builds and tests Windows x64, both Mac architectures and both Linux architectures.
@@ -215,6 +241,8 @@ The smoke test performs a fresh Python/Mokuro install, an update and an uninstal
 using isolated state and paths containing spaces and Japanese characters. GUI
 loading is checked separately. These tests avoid changing CI login startup jobs;
 startup configuration has separate native checks.
+Linux CI also runs the AppImage's full install/update/uninstall and GUI checks
+with FUSE disabled, verifying its extraction fallback on x64 and ARM64.
 
 CI runs unit tests and package builds on Linux, Windows and macOS. Startup
 configuration tests cover paths with spaces, quoting and per-user credentials;

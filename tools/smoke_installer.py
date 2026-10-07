@@ -1,4 +1,5 @@
 """Exercise the actual frozen installer with isolated state and no login jobs."""
+import argparse
 import json
 import os
 from pathlib import Path
@@ -9,12 +10,17 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 
 def main():
-    executable = json.loads((ROOT / "build/installer-build.json").read_text())["executable"]
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--executable", type=Path)
+    parser.add_argument("--extract-and-run", action="store_true", help="Run an AppImage without FUSE")
+    args = parser.parse_args()
+    executable = str(args.executable or json.loads((ROOT / "build/installer-build.json").read_text())["executable"])
+    prefix = [executable] + (["--appimage-extract-and-run"] if args.extract_and_run else [])
     with tempfile.TemporaryDirectory(prefix="Mokuro Installer 日本語 ") as directory:
         root = Path(directory)
         installed, bins, state = root / "installation", root / "bin with spaces", root / "state"
         report = root / "report.json"
-        arguments = [executable, "--cli", "--fresh", "--no-autostart", "--no-path",
+        arguments = [*prefix, "--cli", "--fresh", "--no-autostart", "--no-path",
                      "--root", str(installed), "--bin-dir", str(bins),
                      "--state-dir", str(state), "--report", str(report)]
         subprocess.run(arguments, check=True)
@@ -37,7 +43,7 @@ def main():
         updated = json.loads(report.read_text(encoding="utf-8"))
         origin = subprocess.check_output([updated["python"], "-X", "utf8", "-c", "import mokuro_browser; print(mokuro_browser.__file__)"], text=True, encoding="utf-8").strip()
         assert Path(origin).is_relative_to(Path(updated["python"]).parents[1])
-        subprocess.run([executable, "--cli", "--uninstall", "--root", str(installed)], check=True)
+        subprocess.run([*prefix, "--cli", "--uninstall", "--root", str(installed)], check=True)
         assert not Path(result["launcher"]).exists()
         assert not (installed / "envs").exists()
         assert (state / "config/pairing-token").read_bytes() == before
