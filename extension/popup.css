@@ -1,0 +1,21 @@
+:root { color-scheme: light; font-family: system-ui, sans-serif; color: #183c3a; background: #f8f6ef; }
+body { width: 302px; margin: 0; padding: 20px; }
+header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+.mark { font-size: 26px; display: grid; place-items: center; width: 45px; height: 45px; border-radius: 12px; background: #dfece6; }
+h1 { font-size: 19px; margin: 0 0 3px; letter-spacing: -.4px; }
+header p { margin: 0; color: #677973; font-size: 11px; }
+#status { font-size: 12px; padding: 10px 12px; background: #edece3; border-radius: 8px; margin-bottom: 14px; line-height: 1.5; }
+button { display: block; box-sizing: border-box; width: 100%; margin: 8px 0; padding: 12px; background: #fffdf8; color: #183c3a; border: 1px solid #d4dace; border-radius: 9px; font: 600 13px system-ui; cursor: pointer; }
+button:hover { border-color: #548778; background: #edf4ee; }
+.primary { background: #225c50; border-color: #225c50; color: white; }
+.primary:hover { background: #194b40; color: white; }
+#auto[aria-pressed="true"] { background: #dfece6; border-color: #225c50; }
+.auto-hint { font-size: 11px; line-height: 1.5; color: #6b7871; margin: 4px 0 14px; }
+.quiet { background: transparent; border-color: transparent; font-weight: 400; color: #63736c; padding: 6px; }
+.hint { font-size: 11px; line-height: 1.6; color: #6b7871; margin: 16px 0 8px; }
+.shortcut { font-size: 10px; color: #809087; }
+#error { color: #a53428; font-size: 12px; line-height: 1.5; }
+details { font-size: 12px; margin-bottom: 12px; }
+summary { cursor: pointer; }
+label { display: block; margin-bottom: 5px; }
+input { box-sizing: border-box; width: 100%; padding: 8px; }

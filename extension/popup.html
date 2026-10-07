@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Local Mokuro</title><link rel="stylesheet" href="popup.css"></head>
+<body>
+  <header><span class="mark">文</span><div><h1>Local Mokuro</h1><p>Read manga with selectable text</p></div></header>
+  <div id="status" role="status">Checking local server…</div>
+  <details id="pairing"><summary>Pair with this computer</summary>
+    <p class="hint">Paste the code shown by <code>mokuro-browser setup</code>.</p>
+    <label for="pairing-code">Pairing code</label>
+    <input id="pairing-code" type="password" autocomplete="off" spellcheck="false">
+    <button id="pair">Connect local server</button>
+  </details>
+  <button id="auto" aria-pressed="false">Auto-scan manga: Off</button>
+  <p class="auto-hint">When on, scan visible manga images as you turn pages or scroll.</p>
+  <button id="largest" class="primary">Scan manga image</button>
+  <button id="check">Check / restore page text</button>
+  <button id="pick">Choose an image on this page</button>
+  <button id="visible">Scan visible tab area</button>
+  <button id="clear" class="quiet">Clear OCR from this tab</button>
+  <p class="hint">Hover over detected text and use your usual Yomitan scan shortcut. Use the visible tab option for canvas readers.</p>
+  <p class="shortcut">Shortcut: Alt + Shift + M</p>
+  <div id="error" role="alert"></div>
+  <script src="popup.js"></script>
+</body></html>

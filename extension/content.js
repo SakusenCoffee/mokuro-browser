@@ -1,0 +1,385 @@
+(() => {
+  if (globalThis.__localMokuroInstalled) return;
+  globalThis.__localMokuroInstalled = true;
+  const pageKey = crypto.randomUUID();
+  const images = new Map();
+  const ids = new WeakMap();
+  const layers = new Set();
+  let pickerCleanup = null;
+  let panel = null;
+  let noticeTimeout;
+  let fullText = "";
+  let autoEnabled = false;
+  let autoTimer;
+  let autoRunning = false;
+  let retryAfter = 0;
+  let clearedKey = null;
+  let missingKey = null;
+  let missingUntil = 0;
+  const attempted = new Map();
+
+  const host = document.createElement("div");
+  host.id = "local-mokuro-overlay";
+  host.style.cssText = "all:initial;position:absolute;top:0;left:0;width:0;height:0;z-index:2147483646;pointer-events:none";
+  document.documentElement.append(host);
+  // Dictionary extensions need ordinary DOM text for caret hit testing.
+  // Keep styles scoped instead of hiding OCR behind a closed shadow root.
+  const root = host;
+  const style = document.createElement("style");
+  style.textContent = `
+    #local-mokuro-overlay :where(div,p,section,pre,button){all:initial;box-sizing:border-box}
+  ` + `
+    .layer{position:absolute;overflow:hidden;pointer-events:none}
+    .inner{position:absolute;transform-origin:0 0;pointer-events:none}.block{position:absolute;pointer-events:none}
+    .block:hover{z-index:1000}.line{position:absolute;white-space:nowrap;color:#111;background:white;
+      margin:0;font-family:"Noto Sans JP","Meiryo",sans-serif;line-height:1.1;letter-spacing:.03em;user-select:text;cursor:text;
+      display:block;opacity:0;pointer-events:auto;border:0;outline:none}
+    .block:hover .line,.layer.pinned .line{opacity:1}
+    .notice,.toolbar,.panel{position:fixed;pointer-events:auto;font:13px/1.5 system-ui,sans-serif;color:#203b35;
+      background:#fffcf3;border:1px solid #c7d8cd;box-shadow:0 3px 20px #0003;border-radius:12px}
+    .notice{bottom:24px;left:24px;max-width:430px;padding:14px 18px;white-space:pre-wrap}
+    .notice.error{color:#9e3127;border-color:#d8afa6}.toolbar{bottom:24px;right:24px;display:flex;padding:6px;gap:5px;align-items:center}
+    button{font:600 12px system-ui;color:#225c50;background:#eef3e9;border:0;border-radius:7px;padding:9px 11px;cursor:pointer}
+    button:hover{background:#dfe9d9}.panel{top:24px;right:24px;width:360px;max-width:90vw;max-height:70vh;overflow:auto;padding:18px}
+    .panel pre{display:block;white-space:pre-wrap;font:16px/1.8 "Noto Sans JP",sans-serif;user-select:text;margin:14px 0 0}
+    .pick-outline{position:fixed;pointer-events:none;border:3px solid #34a78b;background:#34a78b12;border-radius:4px}
+  `.replace(/(^|})\s*([^{}]+)\{/g, (_, end, selectors) =>
+    `${end} ${selectors.split(",").map(selector => `#local-mokuro-overlay ${selector.trim()}`).join(",")} {`);
+  root.append(style);
+  const notice = document.createElement("div");
+  notice.className = "notice";
+  notice.style.display = "none";
+  notice.setAttribute("role", "status");
+  root.append(notice);
+
+  function notify(text, error = false, temporary = false) {
+    clearTimeout(noticeTimeout);
+    notice.textContent = text;
+    notice.className = `notice${error ? " error" : ""}`;
+    notice.style.display = "block";
+    if (temporary) noticeTimeout = setTimeout(() => { notice.style.display = "none"; }, 6000);
+  }
+  function descriptor(image) {
+    if (!image?.complete || !image.naturalWidth) throw new Error("Wait for this image to load, then try again.");
+    let id = ids.get(image);
+    if (!id) { id = crypto.randomUUID(); ids.set(image, id); images.set(id, image); }
+    return {kind: "image", id, src: image.currentSrc || image.src, pageKey,
+      width: image.naturalWidth, height: image.naturalHeight};
+  }
+  function visibleImages() {
+    return [...document.images].map(image => {
+      const rect = image.getBoundingClientRect();
+      const width = Math.max(0, Math.min(innerWidth, rect.right) - Math.max(0, rect.left));
+      const height = Math.max(0, Math.min(innerHeight, rect.bottom) - Math.max(0, rect.top));
+      const css = getComputedStyle(image);
+      return {image, area: width * height, css};
+    }).filter(item => item.area > 1000 && item.image.naturalWidth * item.image.naturalHeight > 40000
+      && item.css.visibility !== "hidden" && item.css.display !== "none")
+      .sort((a, b) => b.area - a.area);
+  }
+  function clear(explicit = false) {
+    if (explicit) clearedKey = MokuroResults.key([...layers][0]?.target || {});
+    pickerCleanup?.();
+    for (const item of layers) { item.cleanup(); item.node.remove(); }
+    layers.clear();
+    root.querySelector(".toolbar")?.remove();
+    panel?.remove(); panel = null;
+    fullText = "";
+    notice.style.display = "none";
+  }
+
+  function button(label, action) {
+    const element = document.createElement("button");
+    element.textContent = label;
+    element.onclick = action;
+    return element;
+  }
+  function toolbar() {
+    root.querySelector(".toolbar")?.remove();
+    const bar = document.createElement("div"); bar.className = "toolbar";
+    const toggle = button("Show text", () => {
+      const pinned = ![...layers].some(item => item.node.classList.contains("pinned"));
+      for (const item of layers) item.node.classList.toggle("pinned", pinned);
+      toggle.textContent = pinned ? "Hover text" : "Show text";
+    });
+    bar.append(toggle, button("All text", () => {
+      if (panel) { panel.remove(); panel = null; return; }
+      panel = document.createElement("section"); panel.className = "panel";
+      panel.append(button("Copy all text", async () => {
+        try { await navigator.clipboard.writeText(fullText); notify("Copied OCR text.", false, true); }
+        catch { notify("Select the text below and copy it with Ctrl+C.", false, true); }
+      }));
+      const pre = document.createElement("pre"); pre.textContent = fullText;
+      panel.append(pre); root.append(panel);
+    }), button("Clear", () => {
+      clear(true); chrome.runtime.sendMessage({type: "CANCEL"}).catch(() => {});
+    }));
+    root.append(bar);
+  }
+
+  function fitPosition(value, remaining) {
+    if (value.endsWith("%")) return remaining * parseFloat(value) / 100;
+    if (value === "left" || value === "top") return 0;
+    if (value === "right" || value === "bottom") return remaining;
+    if (value === "center") return remaining / 2;
+    return parseFloat(value) || 0;
+  }
+
+  function render(target, result) {
+    if (!MokuroResults.valid(result)) throw new Error("Incomplete OCR data. Check the page to scan it again.");
+    if (target.pageKey !== pageKey) throw new Error("The page changed during scanning. Scan again.");
+    const image = target.kind === "image" ? images.get(target.id) : null;
+    if (target.kind === "image" && (!image?.isConnected || (image.currentSrc || image.src) !== target.src)) {
+      throw new Error("The manga image changed during scanning. Scan again.");
+    }
+    clear();
+    if (!host.isConnected) document.documentElement.append(host);
+    clearedKey = null;
+    missingKey = null;
+    const layer = document.createElement("div"); layer.className = "layer";
+    const inner = document.createElement("div"); inner.className = "inner";
+    inner.style.width = `${result.img_width}px`; inner.style.height = `${result.img_height}px`;
+    layer.append(inner); root.append(layer);
+    fullText = result.blocks.map(block => block.lines.join("\n")).join("\n\n");
+    for (const block of result.blocks) {
+      const [x1, y1, x2, y2] = block.box;
+      const box = document.createElement("div"); box.className = "block";
+      Object.assign(box.style, {left: `${x1}px`, top: `${y1}px`, width: `${x2-x1}px`, height: `${y2-y1}px`});
+      for (let index = 0; index < block.lines.length; index++) {
+        const text = block.lines[index];
+        if (!text) continue;
+        const poly = block.lines_coords[index];
+        const left = Math.min(...poly.map(point => point[0]));
+        const top = Math.min(...poly.map(point => point[1]));
+        const width = Math.max(...poly.map(point => point[0])) - left;
+        const height = Math.max(...poly.map(point => point[1])) - top;
+        const units = [...text].reduce((sum, char) => sum + (/[^\u0000-\u00ff]/.test(char) ? 1 : .5), 0);
+        const font = Math.max(3, Math.min(block.font_size, (block.vertical ? height : width) / (units * 1.03 || 1)));
+        const line = document.createElement("p"); line.className = "line"; line.textContent = text;
+        Object.assign(line.style, {left: `${left-x1}px`, top: `${top-y1}px`, width: `${width}px`,
+          height: `${height}px`, fontSize: `${font}px`, writingMode: block.vertical ? "vertical-rl" : "horizontal-tb"});
+        box.append(line);
+      }
+      inner.append(box);
+    }
+    let frame = 0;
+    const layout = () => {
+      frame = 0;
+      if (image) {
+        if (!image.isConnected || (image.currentSrc || image.src) !== target.src) {
+          layer.style.display = "none"; return;
+        }
+        const rect = image.getBoundingClientRect();
+        const css = getComputedStyle(image);
+        const offsetX = parseFloat(css.borderLeftWidth) + parseFloat(css.paddingLeft);
+        const offsetY = parseFloat(css.borderTopWidth) + parseFloat(css.paddingTop);
+        const width = rect.width - offsetX - parseFloat(css.borderRightWidth) - parseFloat(css.paddingRight);
+        const height = rect.height - offsetY - parseFloat(css.borderBottomWidth) - parseFloat(css.paddingBottom);
+        let sx = width / result.img_width, sy = height / result.img_height;
+        if (css.objectFit !== "fill") {
+          let scale = css.objectFit === "cover" ? Math.max(sx, sy) : Math.min(sx, sy);
+          if (css.objectFit === "none") scale = 1;
+          if (css.objectFit === "scale-down") scale = Math.min(1, scale);
+          sx = sy = scale;
+        }
+        const positions = css.objectPosition.split(" ");
+        const x = fitPosition(positions[0] || "50%", width - result.img_width * sx);
+        const y = fitPosition(positions[1] || "50%", height - result.img_height * sy);
+        Object.assign(layer.style, {display: "block", left: `${rect.left+scrollX+offsetX}px`, top: `${rect.top+scrollY+offsetY}px`, width: `${width}px`, height: `${height}px`});
+        Object.assign(inner.style, {left: `${x}px`, top: `${y}px`, transform: `scale(${sx},${sy})`});
+      } else {
+        Object.assign(layer.style, {left: `${target.x}px`, top: `${target.y}px`, width: `${target.width}px`, height: `${target.height}px`});
+        inner.style.transform = `scale(${target.width/result.img_width},${target.height/result.img_height})`;
+      }
+    };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(layout); };
+    const resize = new ResizeObserver(schedule);
+    if (image) resize.observe(image);
+    window.addEventListener("scroll", schedule, true);
+    window.addEventListener("resize", schedule);
+    // Position can shift without resizing the image (lazy ads, reader controls).
+    const interval = setInterval(schedule, 700);
+    layers.add({node: layer, target, result, layout, cleanup() {
+      resize.disconnect(); clearInterval(interval); cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", schedule, true); window.removeEventListener("resize", schedule);
+    }});
+    layout(); toolbar();
+    notify(`${result.blocks.length} text regions ready. Hover to select text.`, false, true);
+  }
+
+  function pick() {
+    pickerCleanup?.();
+    notify("Click the manga image to scan it. Press Esc to cancel.");
+    const outline = document.createElement("div"); outline.className = "pick-outline"; outline.style.display = "none";
+    root.append(outline);
+    const move = event => {
+      const image = event.target.closest?.("img");
+      outline.style.display = image ? "block" : "none";
+      if (image) {
+        const rect = image.getBoundingClientRect();
+        Object.assign(outline.style, {left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px`});
+      }
+    };
+    const click = event => {
+      const image = event.target.closest?.("img");
+      if (!image) return;
+      event.preventDefault(); event.stopImmediatePropagation();
+      pickerCleanup();
+      try {
+        chrome.runtime.sendMessage({type: "SCAN_IMAGE", target: descriptor(image)}).then(reply => {
+          if (!reply.ok) notify(reply.error, true);
+        });
+      } catch (error) { notify(error.message, true); }
+    };
+    const key = event => { if (event.key === "Escape") { pickerCleanup(); notice.style.display = "none"; } };
+    document.addEventListener("mousemove", move, true); document.addEventListener("click", click, true); document.addEventListener("keydown", key, true);
+    pickerCleanup = () => {
+      outline.remove(); document.removeEventListener("mousemove", move, true); document.removeEventListener("click", click, true);
+      document.removeEventListener("keydown", key, true); pickerCleanup = null;
+    };
+  }
+
+  function remember(target) {
+    attempted.set(MokuroResults.key(target), Date.now() + 15000);
+    if (attempted.size > 100) attempted.delete(attempted.keys().next().value);
+  }
+
+  function mangaImage() {
+    return visibleImages().find(({image, area}) => {
+      const ratio = image.naturalWidth / image.naturalHeight;
+      if (!image.complete || area < 40000 || image.naturalWidth < 350 || image.naturalHeight < 600 || ratio < .35 || ratio > 2.4) return false;
+      const ancestors = [];
+      for (let node = image, depth = 0; node && depth < 4; node = node.parentElement, depth++) {
+        ancestors.push(node.id, node.className);
+      }
+      const context = [document.title, location.hostname, location.pathname, image.alt, image.currentSrc || image.src, ...ancestors].join(" ");
+      // Require reader/manga cues as well as page-sized geometry. A large
+      // photo on an unrelated site should not automatically start OCR.
+      return /manga|manhwa|manhua|comic|chapter|reader|漫画|マンガ|コミック|第\s*\d+\s*[話巻]/i.test(context);
+    })?.image;
+  }
+
+  function scheduleAuto(delay = 650) {
+    clearTimeout(autoTimer);
+    autoTimer = setTimeout(scanAuto, delay);
+  }
+
+  function overlayComplete(target, result) {
+    if (!MokuroResults.valid(result) || !host.isConnected) return false;
+    const item = [...layers].find(item => item.target.id === target.id
+      && MokuroResults.key(item.target) === MokuroResults.key(target));
+    if (!item?.node.isConnected) return false;
+    item.layout();
+    const expected = MokuroResults.lines(result);
+    const actual = [...item.node.querySelectorAll(".line")];
+    return item.node.style.display !== "none" && item.node.querySelectorAll(".block").length === result.blocks.length
+      && actual.length === expected.length && actual.every((line, index) => line.textContent === expected[index]
+        && getComputedStyle(line).visibility !== "hidden" && [...line.getClientRects()].some(rect => rect.width > 0 && rect.height > 0));
+  }
+
+  async function scanAuto() {
+    autoTimer = null;
+    if (autoRunning || pickerCleanup || document.visibilityState !== "visible") return;
+    if (Date.now() < retryAfter) { scheduleAuto(retryAfter - Date.now()); return; }
+    const image = mangaImage() || (!autoEnabled && visibleImages().find(item => item.image.complete)?.image);
+    if (!image) return;
+    const target = descriptor(image);
+    const key = MokuroResults.key(target);
+    if (clearedKey && clearedKey !== key) clearedKey = null;
+    if (clearedKey === key || (!autoEnabled && missingKey === key && Date.now() < missingUntil)) return;
+    const current = [...layers].find(item => item.target.id === target.id && MokuroResults.key(item.target) === key);
+    if (current && overlayComplete(target, current.result)) return;
+    if ((attempted.get(key) || 0) > Date.now()) return;
+    autoRunning = true;
+    try {
+      const reply = await chrome.runtime.sendMessage({type: autoEnabled ? "AUTO_SCAN" : "CHECK_CACHE", target});
+      if (!reply.ok) throw new Error(reply.error);
+      if (reply.data.missing) { missingKey = key; missingUntil = Date.now() + 5000; }
+      if (reply.data.restored) attempted.delete(key);
+      if (reply.data.started || reply.data.started === false) {
+        retryAfter = Date.now() + 1500;
+        scheduleAuto(1500);
+      }
+    } catch (error) {
+      remember(target); // Back off failures instead of permanently skipping a page.
+      notify(error.message, true, true);
+    } finally { autoRunning = false; }
+  }
+
+  function setAuto(enabled) {
+    autoEnabled = enabled === true;
+    if (autoEnabled) {
+      attempted.clear();
+      retryAfter = 0;
+    }
+    scheduleAuto();
+  }
+
+  chrome.storage.local.get({autoScan: false}).then(settings => setAuto(settings.autoScan));
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes.autoScan) setAuto(changes.autoScan.newValue);
+  });
+  const observer = new MutationObserver(records => {
+    // Ignore our own overlay updates so progress notices don't restart the debounce.
+    if (records.some(record => !host.contains(record.target))) scheduleAuto();
+  });
+  observer.observe(document.documentElement, {subtree: true, childList: true, attributes: true,
+    attributeFilter: ["src", "srcset", "sizes", "style", "class"]});
+  document.addEventListener("load", event => { if (event.target instanceof HTMLImageElement) scheduleAuto(); }, true);
+  document.addEventListener("visibilitychange", () => scheduleAuto());
+  window.addEventListener("scroll", () => scheduleAuto(), {passive: true});
+  window.addEventListener("resize", () => scheduleAuto());
+  window.addEventListener("popstate", () => scheduleAuto());
+  // Handles client-side URL changes and responsive sources without DOM mutations.
+  setInterval(() => { if (!autoTimer) scheduleAuto(); }, 2500);
+
+  chrome.runtime.onMessage.addListener((message, sender, reply) => {
+    (async () => {
+      if (message.pageKey && message.pageKey !== pageKey) throw new Error("Page changed.");
+      if (message.type === "LARGEST") {
+        const image = visibleImages()[0]?.image;
+        if (!image) throw new Error("No loaded manga image is visible. Try Scan visible tab area.");
+        return descriptor(image);
+      }
+      if (message.type === "FIND_IMAGE") {
+        const image = [...document.images].find(image => (image.currentSrc || image.src) === message.src);
+        if (!image) throw new Error("This image is inside a frame or has changed. Use Scan visible tab area.");
+        return descriptor(image);
+      }
+      if (message.type === "VIEWPORT") {
+        clear();
+        // Hide this extension's notices before capturing the page.
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        return {kind: "viewport", pageKey, x: scrollX, y: scrollY, width: innerWidth, height: innerHeight};
+      }
+      if (message.type === "PICK_IMAGE") pick();
+      if (message.type === "CLEAR") clear(true);
+      if (message.type === "NOTICE") notify(message.text, message.error);
+      if (message.type === "RENDER") render(message.target, message.result);
+      if (message.type === "VERIFY_OVERLAY") return {complete: overlayComplete(message.target, message.result)};
+      if (message.type === "CHECK_STATUS") {
+        clearedKey = null; missingKey = null; attempted.delete(MokuroResults.key(message.target));
+        notify(message.checked.restored ? "Saved page text checked and restored. No new scan needed."
+          : message.checked.started ? "Page text is missing or incomplete. Scanning…" : "Waiting for the current scan…", false, true);
+      }
+      if (message.type === "SCAN_FINISHED") {
+        if (message.failed) remember(message.target);
+        missingKey = null;
+        autoRunning = false; retryAfter = 0; scheduleAuto();
+      }
+      if (message.type === "READ_IMAGE") {
+        const image = images.get(message.target.id);
+        if (!image || (image.currentSrc || image.src) !== message.target.src) throw new Error("Image changed; scan again.");
+        const response = await fetch(message.target.src);
+        const blob = await response.blob();
+        if (blob.size > 32 * 1024 * 1024) throw new Error("Image exceeds 32 MB.");
+        const data = await new Promise((resolve, reject) => {
+          const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(blob);
+        });
+        return {data};
+      }
+      return {};
+    })().then(reply, error => reply({error: error.message}));
+    return true;
+  });
+})();

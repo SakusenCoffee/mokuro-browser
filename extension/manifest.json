@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Local Mokuro",
+  "version": "1.4.0",
+  "description": "Scan manga in your current tab using your local Mokuro, with selectable text overlays.",
+  "permissions": ["activeTab", "scripting", "contextMenus", "storage"],
+  "host_permissions": ["http://127.0.0.1:8766/*", "http://*/*", "https://*/*"],
+  "background": {
+    "scripts": ["ocr-result.js", "page-cache.js", "background.js"],
+    "service_worker": "background.js"
+  },
+  "content_scripts": [{"matches": ["http://*/*", "https://*/*"], "js": ["ocr-result.js", "content.js"], "run_at": "document_idle"}],
+  "action": {"default_popup": "popup.html", "default_title": "Scan with Local Mokuro"},
+  "browser_specific_settings": {
+    "gecko": {"id": "mokuro-browser@local", "strict_min_version": "121.0"}
+  },
+  "commands": {
+    "scan-largest": {"suggested_key": {"default": "Alt+Shift+M"}, "description": "Scan the largest visible manga image"}
+  }
+}

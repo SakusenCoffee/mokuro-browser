@@ -1,0 +1,11 @@
+pairing-token
+extension/config.js
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+build/
+dist/
+*.log
+.DS_Store
+.pytest_cache/
