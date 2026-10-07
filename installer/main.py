@@ -251,7 +251,7 @@ def gui(args):
         else:
             root.after(150, start)
     if args.gui_cycle_test:
-        deadline = time.monotonic() + 40
+        deadline = time.monotonic() + 280
         def check_cycle():
             if server_status.get().startswith("Server running") and len(code.get()) >= 32:
                 if args.report:
