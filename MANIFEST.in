@@ -3,3 +3,6 @@ exclude extension/config.js
 include tests/*.mjs
 include tools/package_extension.py
 include tools/check_native_startup.py
+recursive-include installer *.py
+recursive-include installer/licenses *
+include tools/*installer*.py

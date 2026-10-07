@@ -11,24 +11,39 @@ dependencies and model caches. Scanning happens on your computer.
 
 ## Quick start
 
-You need a working **Mokuro installation** and Python 3.10 or newer (3.12 is a
-good choice for a new environment). These instructions work on Windows, macOS
-and Linux. On systems where the command is `python3`, substitute it for `python`.
+**You do not need Python or Mokuro installed first.**
 
-1. [Download this repository as a ZIP](https://github.com/SakusenCoffee/mokuro-browser/archive/refs/heads/main.zip)
-   and extract it.
-2. Open a terminal in the extracted folder. **Activate the Python environment
-   where Mokuro works**, if you used a virtual environment. Run:
+1. Download the installer for your computer from
+   [Releases](https://github.com/SakusenCoffee/mokuro-browser/releases/latest):
 
-   ```console
-   python -m pip install .
-   mokuro-browser setup
-   mokuro-browser serve
-   ```
+   | Computer | Download |
+   | --- | --- |
+   | Windows 64-bit (Intel / AMD) | `MokuroBrowserSetup-windows-x64.exe` |
+   | Mac with Apple silicon | `MokuroBrowserSetup-macos-arm64.zip` |
+   | Mac with Intel processor | `MokuroBrowserSetup-macos-x64.zip` |
+   | Linux desktop (Intel / AMD) | `MokuroBrowserSetup-linux-x64.tar.gz` |
+   | Linux desktop (ARM64) | `MokuroBrowserSetup-linux-arm64.tar.gz` |
 
-   Keep the server terminal open. Setup prints an **extension folder** and a
-   **pairing code**. The first scan may download/load the OCR models.
-3. Install the extension:
+2. Run the `.exe`, or extract the Mac/Linux download and open
+   **MokuroBrowserSetup**. Click **Install / update**. Leave the two options
+   checked to reuse an existing Mokuro/GPU environment and start at login.
+3. Wait for installation to finish. It downloads Python and missing dependencies,
+   installs the server, adds `mokuro-browser` to your user PATH, and prepares the
+   extension. **Open extension folder** and **Copy pairing code** help with the
+   browser steps below. No administrator/root installation is needed.
+
+Internet is required for dependency downloads, which can take several minutes.
+The first scan may also download the OCR models. Fresh installations use CPU
+PyTorch; existing compatible Mokuro/GPU installations are reused. Installer
+builds target Windows 10/11 x64, macOS 15+ and Linux desktops with glibc 2.35+
+(for example Ubuntu 22.04+). Older/other Unix systems can use the manual setup.
+The installers are currently unsigned; your OS may ask you to confirm opening
+the downloaded application. On macOS this may require **Open Anyway** in
+System Settings → Privacy & Security after the first launch attempt.
+
+## Install the browser extension
+
+1. Install the extension:
    - **Chrome/Chromium:** open `chrome://extensions`, enable **Developer mode**,
      click **Load unpacked**, and select the extension folder printed by setup.
    - **Firefox:** open `about:debugging#/runtime/this-firefox`, click
@@ -36,17 +51,36 @@ and Linux. On systems where the command is `python3`, substitute it for `python`
      This test installation lasts until Firefox closes. A permanent Firefox
      install requires a Mozilla-signed extension; this project is not yet
      published in the add-on stores.
-4. Open the **Local Mokuro** extension popup, paste the pairing code under
+2. Open the **Local Mokuro** extension popup, paste the pairing code under
    **Pair with this computer**, and click **Connect local server**.
-5. Open a manga webpage and click **Scan manga image**, or turn on
+3. Open a manga webpage and click **Scan manga image**, or turn on
    **Auto-scan manga**. Hover over its text and use your usual Yomitan shortcut.
 
-If `mokuro-browser` is not on your PATH, use `python -m mokuro_browser` in its
-place, for example `python -m mokuro_browser setup`.
+Browsers require this extension installation step; the desktop installer cannot
+silently enable an extension. Firefox's temporary installation lasts until
+Firefox closes; permanent Firefox installation requires Mozilla signing.
+
+## Manual Python setup
+
+For an existing Python/Mokuro environment or an OS without a prebuilt installer,
+[download the source ZIP](https://github.com/SakusenCoffee/mokuro-browser/archive/refs/heads/main.zip),
+extract it, activate your environment and run in the extracted folder:
+
+```console
+python -m pip install .
+mokuro-browser setup
+mokuro-browser serve
+```
+
+Python 3.10+ is required for this route. Pip installs Mokuro if needed. On systems
+where the command is `python3`, substitute it for `python`. If `mokuro-browser`
+is not on PATH, use `python -m mokuro_browser` in its place. Keep the server
+terminal open, or enable automatic startup below.
 
 ## Start automatically at login
 
-Stop the foreground server with Ctrl+C, then run from the same Python environment:
+The installer enables this by default. For manual installations, stop the
+foreground server with Ctrl+C and run from the same Python environment:
 
 ```console
 mokuro-browser autostart install
@@ -100,7 +134,21 @@ while it is open, including after page navigation; closing it deletes those
 records. Auto-scan recognizes common manga-reader pages using image size and
 page cues; manual scanning is available when it misses a site.
 
-## Updating and troubleshooting
+## Updating and uninstalling
+
+Download and run the latest installer, then click **Install / update** again.
+It prepares and checks a new environment before replacing the command launcher.
+Existing pairing is preserved. Reload the extension in your browser afterward.
+If a custom Mokuro environment isn't discovered automatically, run the installer
+from an activated environment, or use its `--cli --python PATH` option.
+
+To uninstall, open the installer again and click **Uninstall managed
+installation**. This removes the private Python/dependency environment, its
+launcher, the PATH entries it added and its login startup job. Your previous
+Mokuro installation, shared model caches, pairing and extension data are kept.
+If the installer replaced an existing command launcher, uninstall restores it.
+
+## Troubleshooting and manual updates
 
 To update, download/extract the latest ZIP, run `python -m pip install .` again,
 and run `mokuro-browser setup` to update the exported extension folder. Reload
@@ -115,7 +163,7 @@ mokuro-browser pair
 Prebuilt packages are also available on the
 [Releases page](https://github.com/SakusenCoffee/mokuro-browser/releases).
 Download the `.whl` file and install it in your Mokuro environment with
-`python -m pip install mokuro_browser-0.1.0-py3-none-any.whl`, then run
+`python -m pip install mokuro_browser-0.1.1-py3-none-any.whl`, then run
 `mokuro-browser setup`. The wheel includes both the server and extension.
 The separate extension ZIP is for people updating only the browser component;
 it still needs the companion server and pairing.
@@ -152,6 +200,21 @@ python -m pip install build
 python -m build
 python tools/package_extension.py
 ```
+
+To build a standalone installer on its target OS (Python 3.12+ with Tk support):
+
+```console
+python -m pip install 'setuptools>=77,<81' build platformdirs 'pyinstaller>=6.19,<7' uv==0.10.1
+python tools/build_installer.py
+```
+
+The build embeds the public companion wheel and uv binary. The installer itself
+does not depend on a Python installation on the user's computer. Its workflow
+builds and tests Windows x64, both Mac architectures and both Linux architectures.
+The smoke test performs a fresh Python/Mokuro install, an update and an uninstall
+using isolated state and paths containing spaces and Japanese characters. GUI
+loading is checked separately. These tests avoid changing CI login startup jobs;
+startup configuration has separate native checks.
 
 CI runs unit tests and package builds on Linux, Windows and macOS. Startup
 configuration tests cover paths with spaces, quoting and per-user credentials;

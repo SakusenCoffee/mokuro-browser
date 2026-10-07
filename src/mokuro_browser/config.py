@@ -7,14 +7,18 @@ from platformdirs import user_config_dir, user_data_dir, user_log_dir
 
 APP = "mokuro-browser"
 
+def state_override(folder):
+    base = os.environ.get("MOKURO_BROWSER_HOME")
+    return Path(base) / folder if base else None
+
 def config_dir():
-    return Path(user_config_dir(APP, appauthor=False))
+    return state_override("config") or Path(user_config_dir(APP, appauthor=False))
 
 def data_dir():
-    return Path(user_data_dir(APP, appauthor=False))
+    return state_override("data") or Path(user_data_dir(APP, appauthor=False))
 
 def log_dir():
-    return Path(user_log_dir(APP, appauthor=False))
+    return state_override("logs") or Path(user_log_dir(APP, appauthor=False))
 
 def atomic_write(path, contents):
     path = Path(path)

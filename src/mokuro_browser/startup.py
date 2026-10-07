@@ -105,6 +105,7 @@ def install():
         identity = windows_identity()
         atomic_write(path, windows_task(args, identity))
         name = task_name(identity)
+        run("schtasks", "/End", "/TN", name, check=False)
         run("schtasks", "/Create", "/TN", name, "/XML", str(path), "/F")
         run("schtasks", "/Run", "/TN", name)
     return path

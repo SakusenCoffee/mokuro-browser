@@ -20,3 +20,15 @@ Model weights are not included. Mokuro/manga-ocr obtain their normal models
 through their existing cache/download mechanisms. Other dependencies retain
 their respective licenses. No manga images, library OCR files or dictionary
 contents are included in this repository or distribution.
+
+Standalone installers additionally embed uv (Astral), distributed under MIT OR
+Apache-2.0, and use PyInstaller's GPL-2.0 license with its bootloader exception.
+The bootloader exception permits distributing the frozen application under this
+project's license. Bootstrap Python uses the PSF license, Tcl/Tk use their
+permissive licenses, and platformdirs uses MIT. Installer payloads include these
+license texts. Their upstream sources are available at
+[uv](https://github.com/astral-sh/uv),
+[PyInstaller](https://github.com/pyinstaller/pyinstaller),
+[Python](https://github.com/python/cpython),
+[Tcl](https://github.com/tcltk/tcl), [Tk](https://github.com/tcltk/tk), and
+[platformdirs](https://github.com/tox-dev/platformdirs).

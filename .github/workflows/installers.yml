@@ -1,0 +1,42 @@
+name: Standalone installers
+on:
+  push:
+    paths: ['installer/**', 'tools/*installer*', 'src/**', 'extension/**', 'pyproject.toml', 'setup.py', '.github/workflows/installers.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            label: windows-x64
+          - os: ubuntu-22.04
+            label: linux-x64
+          - os: ubuntu-22.04-arm
+            label: linux-arm64
+          - os: macos-15
+            label: macos-arm64
+          - os: macos-15-intel
+            label: macos-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install 'setuptools>=77,<81' build platformdirs 'pyinstaller>=6.19,<7' uv==0.10.1
+      - run: python tools/build_installer.py
+      - run: python tools/smoke_installer.py
+      - name: Check GUI on Linux
+        if: runner.os == 'Linux'
+        run: xvfb-run -a build/installer-dist/MokuroBrowserSetup --gui-smoke-test
+      - name: Check GUI on Windows and macOS
+        if: runner.os != 'Linux'
+        run: build/installer-dist/MokuroBrowserSetup --gui-smoke-test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-${{ matrix.label }}
+          path: dist/MokuroBrowserSetup-*
