@@ -19,7 +19,9 @@ from urllib.parse import parse_qs, urlsplit
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from . import __version__
-from .config import pairing_token
+from .config import pairing_token, data_dir, preferences
+from .history import ReadingHistory
+from .monitor import LoadMonitor
 MAX_BYTES = 32 * 1024 * 1024
 MAX_PIXELS = 40_000_000
 Image.MAX_IMAGE_PIXELS = MAX_PIXELS
@@ -51,7 +53,8 @@ class OcrEngine:
     def __init__(self, loader=load_mokuro):
         self.loader = loader
         self.model = None
-        self.model_state = "not_loaded"
+        self.model_state = "loading"
+        self.model_error = None
         self.jobs = OrderedDict()
         self.results = OrderedDict()
         self.lock = threading.Lock()
@@ -67,7 +70,7 @@ class OcrEngine:
                 if self.jobs[key]["status"] in ("complete", "error") and (
                         len(self.jobs) >= 20 or time.time() - self.jobs[key]["created"] > 1800):
                     del self.jobs[key]
-            job = {"id": job_id, "status": "queued", "created": time.time()}
+            job = {"id": job_id, "page_id": digest, "status": "queued", "created": time.time()}
             if not force and digest in self.results:
                 job.update(status="complete", result=self.results[digest], cached=True)
                 self.results.move_to_end(digest)
@@ -82,24 +85,37 @@ class OcrEngine:
         with self.lock:
             return {"status": "ok", "model": self.model_state,
                     "queue": self.pending.qsize(), "ocr_backend": "bundled",
+                    "model_error": self.model_error, "device": getattr(self.model, "device", None),
                     "version": __version__}
 
     def get(self, job_id):
         with self.lock:
             return self.jobs[job_id].copy() if job_id in self.jobs else None
 
+    def load(self):
+        with self.lock:
+            self.model_state, self.model_error = "loading", None
+        try:
+            self.model = self.loader()
+        except Exception as error:
+            with self.lock:
+                self.model_state, self.model_error = "error", str(error)
+            raise
+        with self.lock:
+            self.model_state = "ready"
+
     def work(self):
+        try:
+            self.load()
+        except Exception as error:
+            print(f"Model startup failed: {error}", file=sys.stderr, flush=True)
         while True:
             job_id, digest, image = self.pending.get()
             try:
                 with self.lock:
                     self.jobs[job_id]["status"] = "processing"
-                    if self.model is None:
-                        self.model_state = "loading"
                 if self.model is None:
-                    self.model = self.loader()
-                with self.lock:
-                    self.model_state = "ready"
+                    self.load()
                 started = time.monotonic()
                 with tempfile.TemporaryDirectory(prefix="mokuro-browser-") as directory:
                     path = Path(directory) / "page.png"
@@ -118,8 +134,6 @@ class OcrEngine:
                 print(f"OCR failed: {type(error).__name__}: {error}", file=sys.stderr, flush=True)
                 with self.lock:
                     self.jobs[job_id].update(status="error", error=str(error))
-                    if self.model is None:
-                        self.model_state = "not_loaded"
             finally:
                 self.pending.task_done()
 
@@ -129,6 +143,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, format, *args):
         # Do not log bearer tokens, image URLs or user page contents.
+        if self.path.split("?")[0] in ("/health", "/history"):
+            return
         print(f"{self.command} {self.path.split('?')[0]}: {args[1] if len(args) > 1 else ''}", flush=True)
 
     def allowed_origin(self):
@@ -181,8 +197,15 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if not self.authorized():
             return
-        if self.path == "/health":
-            self.respond(200, self.server.engine.status())
+        route = urlsplit(self.path)
+        if route.path == "/health":
+            self.respond(200, {**self.server.engine.status(), "usage": self.server.monitor.sample()})
+        elif route.path == "/history":
+            try:
+                query = parse_qs(route.query)
+                self.respond(200, self.server.history.list(query.get("offset", [0])[0], query.get("limit", [200])[0]))
+            except ValueError as error:
+                self.respond(400, {"error": str(error)})
         elif re.fullmatch(r"/jobs/[a-f0-9]{32}", self.path):
             job = self.server.engine.get(self.path.split("/")[-1])
             self.respond(200 if job else 404, job or {"error": "Scan expired; scan the page again."})
@@ -193,6 +216,9 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized():
             return
         route = urlsplit(self.path)
+        if route.path == "/history" or re.fullmatch(r"/history/\d+", route.path):
+            self.history_write(route.path)
+            return
         if route.path == "/shutdown":
             # Respond before requesting shutdown so the native-messaging host
             # can reliably distinguish an accepted stop from a dead server.
@@ -222,12 +248,40 @@ class Handler(BaseHTTPRequestHandler):
         except queue.Full:
             self.respond(429, {"error": "Mokuro is busy; try again after the current scan."})
 
+    def history_write(self, path):
+        try:
+            size = int(self.headers.get("Content-Length", "0"))
+            if not 0 < size <= 512 * 1024:
+                raise ValueError("Reading history request is too large or empty.")
+            self.connection.settimeout(10)
+            value = json.loads(self.rfile.read(size))
+            if not isinstance(value, dict):
+                raise ValueError("Invalid reading history request.")
+            if path == "/history":
+                result = self.server.history.add(value.get("page_id"), value.get("source_key"),
+                                                 value.get("lines"), value.get("title", ""))
+            elif value.get("action") == "delete":
+                result = self.server.history.delete(int(path.rsplit("/", 1)[1]))
+            elif value.get("action") == "edit":
+                result = self.server.history.edit(int(path.rsplit("/", 1)[1]), value.get("text"))
+            else:
+                raise ValueError("Unknown reading history action.")
+            self.respond(200, result)
+        except (ValueError, TypeError) as error:
+            self.respond(400, {"error": str(error)})
+        except KeyError as error:
+            self.respond(404, {"error": str(error)})
+        except Exception as error:
+            self.respond(500, {"error": "Could not save reading history: " + str(error)})
 
-def make_server(token, port=8766, engine=None):
+
+def make_server(token, port=8766, engine=None, history=None):
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     server.daemon_threads = True
     server.token = token
     server.engine = engine or OcrEngine()
+    server.history = history or ReadingHistory(data_dir() / "reading-history.sqlite3")
+    server.monitor = LoadMonitor()
     return server
 
 
@@ -241,10 +295,12 @@ def serve(args):
         stream = args.log_file.open("a", encoding="utf-8", buffering=1)
         sys.stdout = sys.stderr = stream
     token = pairing_token(args.token_file)
-    engine = OcrEngine(lambda: load_mokuro(force_cpu=args.force_cpu,
+    settings = preferences(args.settings_file)
+    engine = OcrEngine(lambda: load_mokuro(force_cpu=args.force_cpu or not settings["use_gpu"],
                                          ocr_batch_size=args.ocr_batch_size))
-    server = make_server(token, args.port, engine)
-    print(f"Mokuro browser server: http://127.0.0.1:{args.port}; models load on first scan", flush=True)
+    history = ReadingHistory(args.history_file or data_dir() / "reading-history.sqlite3")
+    server = make_server(token, args.port, engine, history)
+    print(f"Mokuro browser server: http://127.0.0.1:{args.port}; loading models now", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

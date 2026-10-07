@@ -1,12 +1,13 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>Local Mokuro</title><link rel="stylesheet" href="popup.css"></head>
 <body>
-  <header><span class="mark">文</span><div><h1>Local Mokuro</h1><p>Read manga with selectable text</p></div></header>
+  <header><img class="mark" src="icon-128.png" alt=""><div><h1>Local Mokuro</h1><p>Read manga with selectable text</p></div></header>
   <div id="status" role="status">Checking local server…</div>
   <button id="server" aria-pressed="false" disabled>Server: checking…</button>
-  <p class="auto-hint">Starts and stops the local OCR server. It stays off until you turn it on.</p>
-  <details id="pairing"><summary>Pair with this computer</summary>
-    <p class="hint">Pairing is automatic when the desktop app is running. If needed, copy the code from its window.</p>
+  <div class="loads" aria-label="System load"><span>CPU <strong id="cpu-load">—</strong></span><span>GPU <strong id="gpu-load">—</strong></span></div>
+  <p class="auto-hint" id="server-hint">Starts and stops the local OCR server. It stays off until you turn it on.</p>
+  <details id="pairing"><summary><span>Pair with this computer</span><span class="pair-arrow" aria-hidden="true">▾</span></summary>
+    <p class="hint">Copy the connect code from the Mokuro Browser app and paste it here. It is saved in this browser for next time.</p>
     <label for="pairing-code">Pairing code</label>
     <input id="pairing-code" type="password" autocomplete="off" spellcheck="false">
     <button id="pair">Connect local server</button>

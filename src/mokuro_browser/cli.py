@@ -8,8 +8,9 @@ from . import __version__
 from .config import atomic_write, data_dir, pairing_token
 from .native_host import install_native_host
 
-EXTENSION_FILES = ("manifest.json", "background.js", "content.js", "page-cache.js",
-                   "ocr-result.js", "popup.html", "popup.js", "popup.css")
+EXTENSION_FILES = ("manifest.json", "background.js", "content.js", "page-cache.js", "reading-history.js",
+                   "ocr-result.js", "popup.html", "popup.js", "popup.css",
+                   "icon-16.png", "icon-32.png", "icon-48.png", "icon-128.png")
 
 def export_extension(destination=None):
     source = resources.files("mokuro_browser").joinpath("extension")
@@ -34,6 +35,8 @@ def main(argv=None):
     serve.add_argument("--token-file", type=Path)
     serve.add_argument("--log-file", type=Path)
     serve.add_argument("--force-cpu", action="store_true")
+    serve.add_argument("--settings-file", type=Path)
+    serve.add_argument("--history-file", type=Path)
     serve.add_argument("--ocr-batch-size", type=int)
     auto = commands.add_parser("autostart", help="Manage startup at login")
     auto.add_argument("action", choices=("install", "remove"))

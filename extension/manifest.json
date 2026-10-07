@@ -1,17 +1,18 @@
 {
   "manifest_version": 3,
   "name": "Local Mokuro",
-  "version": "1.4.2",
+  "version": "1.5.1",
   "description": "Scan manga in your current tab using your local Mokuro, with selectable text overlays.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAv/dLVLn/Y1zQjjN+aCa2K97ywB3WbHMJEaP/N2jCVzqisSNPDaZxNx5XnO2bbH1luNYQsDv9YCgz5UANYelc/TQl2+7LuTDi5hjPYtKP/87VMueRyzrr1Od6NO5ByGQXDCxNdU10stBdSjTZVU2IxbCW+MnMtVIMNGHwOP8Lz5ZSAMKW/ITOJPLpRtar9KWZWMuB2RvaH8D4aGOl9CHx/DlmPWD3p7PasibvvXROcWH9TQqQjrsDC/0g0ON/SRPIUktMU2Lp9PJB4NPs5aqDB2hHrOjJSGk0e8rgNtlbE5JC7estm1mVvLqdKkvonQVyILGU9tLK/VpbQ7ktAe+KkQIDAQAB",
-  "permissions": ["activeTab", "scripting", "contextMenus", "storage", "nativeMessaging"],
+  "permissions": ["activeTab", "scripting", "contextMenus", "storage", "nativeMessaging", "alarms"],
   "host_permissions": ["http://127.0.0.1:8766/*", "http://*/*", "https://*/*"],
   "background": {
-    "scripts": ["ocr-result.js", "page-cache.js", "background.js"],
+    "scripts": ["ocr-result.js", "page-cache.js", "reading-history.js", "background.js"],
     "service_worker": "background.js"
   },
   "content_scripts": [{"matches": ["http://*/*", "https://*/*"], "js": ["ocr-result.js", "content.js"], "run_at": "document_idle"}],
-  "action": {"default_popup": "popup.html", "default_title": "Scan with Local Mokuro"},
+  "icons": {"16": "icon-16.png", "32": "icon-32.png", "48": "icon-48.png", "128": "icon-128.png"},
+  "action": {"default_popup": "popup.html", "default_title": "Scan with Local Mokuro", "default_icon": {"16": "icon-16.png", "32": "icon-32.png"}},
   "browser_specific_settings": {
     "gecko": {"id": "mokuro-browser@local", "strict_min_version": "121.0"}
   },

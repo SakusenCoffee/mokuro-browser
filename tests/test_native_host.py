@@ -48,7 +48,8 @@ class NativeHostTests(unittest.TestCase):
             native_host.read_message(io.BytesIO(struct.pack("=I", native_host.MAX_MESSAGE_BYTES + 1)))
 
     def test_start_never_uses_a_browser_supplied_command(self):
-        config = {"python": sys.executable, "port": 8766, "token_file": "/tmp/token", "log_file": "/tmp/log"}
+        config = {"python": sys.executable, "port": 8766, "token_file": "/tmp/token", "log_file": "/tmp/log",
+                  "settings_file": "/tmp/settings", "history_file": "/tmp/history"}
         with mock.patch.object(native_host, "status", side_effect=[{"running": False}, {"running": True, "health": {}}]), \
              mock.patch.object(native_host.subprocess, "Popen") as spawn, \
              mock.patch.object(native_host.time, "sleep"):
@@ -56,6 +57,8 @@ class NativeHostTests(unittest.TestCase):
         command = spawn.call_args.args[0]
         self.assertEqual(command[:3], [sys.executable, "-m", "mokuro_browser"])
         self.assertIn("serve", command)
+        self.assertEqual(command[command.index("--settings-file") + 1], "/tmp/settings")
+        self.assertEqual(command[command.index("--history-file") + 1], "/tmp/history")
         self.assertNotIn("/tmp/token", command[:3])
 
     def test_pair_returns_existing_code_without_replacing_it(self):

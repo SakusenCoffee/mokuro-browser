@@ -49,7 +49,7 @@ The AppImage includes its FUSE library. On systems that block FUSE mounts, run
 Use the `arm64` file on ARM computers. Closing the app stops the server it started.
 
 Internet is required for dependency downloads, which can take several minutes.
-The first scan may also download the OCR models. Fresh installations use CPU
+The server loads the OCR models on launch, downloading them if needed. Fresh installations use CPU
 PyTorch; existing compatible Mokuro/GPU installations are reused. Installer
 builds target Windows 10/11 x64, macOS 15+ and Linux desktops with glibc 2.35+
 (for example Ubuntu 22.04+). Older/other Unix systems can use the manual setup.
@@ -214,7 +214,41 @@ code, and accepts image bytes rather than page URLs or local paths. The code is
 stored in your per-user configuration folder and the browser's local extension
 storage. It is never embedded in distributed extension files. OCR uses local
 temporary images and bounded result caches. Model downloads need internet on
-first use; OCR itself does not upload images to an external OCR provider.
+first launch; OCR itself does not upload images or reading history to an external provider.
+
+## GPU, system load, and reading history
+
+The desktop launcher's **Server** tab has a **Use GPU for OCR when available**
+switch. Turning it off forces CPU OCR; turning it on uses a compatible GPU when
+your installed PyTorch supports it. The setting is saved between launches and
+updates. Changing it while the server runs restarts the server and loads the
+models on the selected device. CPU-only PyTorch remains CPU-only with the switch on.
+
+The launcher and extension popup show CPU and GPU **system load** while connected.
+Readings refresh about every two seconds using CPU counters and supported GPU
+driver counters. No GPU workload is created to measure utilization. AMD GPUs on
+Linux and NVIDIA GPUs with NVML can report GPU load; the popup hides meters
+when their counters are unavailable. Models begin loading as soon as the server starts, and both
+interfaces show when they are ready.
+
+The extension saves recognized lines to a local reading archive. The launcher's
+**Reading history** tab shows total characters, Japanese words, kanji, and kana,
+with spaces and punctuation excluded from counts. Word counts use the Japanese
+tokenizer already included with Manga OCR. Totals measure scanned text; they
+cannot determine whether you actually read every line.
+
+Select a saved line to edit it or delete it. Totals update after each change.
+Repeated scans and restored overlays do not count the same page again, and a
+rescan cannot overwrite edits or restore deleted lines. Repeated dialogue on
+different pages is counted normally. Unsent pages remain in the extension until
+the local app can save them. The archive stays on your computer across browser
+restarts, app updates, and managed app uninstalls.
+
+Update the launcher along with the extension: old servers cannot accept reading
+history or report model readiness and utilization. Queued reading history retries
+every minute and when you open the popup. The pairing code stays saved and fills
+the popup's password field when it opens. After updating an unpacked extension,
+reload it in the browser's extensions page and refresh manga tabs for new overlays.
 
 ## Development
 

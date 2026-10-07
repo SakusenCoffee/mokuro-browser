@@ -61,7 +61,9 @@ def prepare_appdir(executable, destination):
     binary.parent.mkdir(parents=True)
     shutil.copyfile(executable, binary)
     binary.chmod(0o755)
-    (destination / ".DirIcon").symlink_to("mokuro-browser.svg")
+    (destination / "mokuro-browser.svg").unlink(missing_ok=True)
+    shutil.copyfile(ROOT / "extension/icon-128.png", destination / "mokuro-browser.png")
+    (destination / ".DirIcon").symlink_to("mokuro-browser.png")
     licenses = destination / "usr/share/licenses/mokuro-browser"
     licenses.mkdir(parents=True)
     for source in [ROOT / "LICENSE", ROOT / "THIRD_PARTY.md", *(ROOT / "installer/licenses").glob("*")]:

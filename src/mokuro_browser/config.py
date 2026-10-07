@@ -1,11 +1,20 @@
 """Per-user credentials outside source and extension distributions."""
 import os
+import json
 from pathlib import Path
 import secrets
 import tempfile
 from platformdirs import user_config_dir, user_data_dir, user_log_dir
 
 APP = "mokuro-browser"
+
+def preferences(path=None):
+    path = Path(path) if path else config_dir() / "preferences.json"
+    try:
+        saved = json.loads(path.read_text(encoding="utf-8"))
+        return {"use_gpu": saved.get("use_gpu", True) is not False}
+    except (OSError, ValueError, AttributeError):
+        return {"use_gpu": True}
 
 def state_override(folder):
     base = os.environ.get("MOKURO_BROWSER_HOME")

@@ -1,6 +1,6 @@
 // Chrome uses this file as an MV3 service worker. Firefox uses it as the last
 // script in an MV3 background page, where importScripts does not exist.
-if (typeof importScripts === "function") importScripts("ocr-result.js", "page-cache.js");
+if (typeof importScripts === "function") importScripts("ocr-result.js", "page-cache.js", "reading-history.js");
 const SERVER_URL = "http://127.0.0.1:8766";
 const NATIVE_HOST = "com.sakusencoffee.mokuro_browser";
 const busy = new Set();
@@ -34,7 +34,9 @@ async function api(path, options = {}, pairingCode) {
   }
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || `Server error ${response.status}`);
-  if (!pairingCode) await chrome.storage.local.set({pairingToken: token});
+  if (!pairingCode && (await chrome.storage.local.get("pairingToken")).pairingToken !== token) {
+    await chrome.storage.local.set({pairingToken: token});
+  }
   return result;
 }
 
@@ -82,6 +84,7 @@ async function performScan(tabId, target, bytes, force = false) {
       if (progress.status === "complete") {
         if (!MokuroResults.valid(progress.result)) throw new Error("Incomplete OCR result. Check the page again to retry.");
         await savePageResult(tabId, target, progress.result);
+        await queueReadingPage(tabId, target, progress.result, progress.page_id);
         completed = true;
         if ((generations.get(tabId) || 0) !== generation) return;
         const reply = await tell(tabId, "RENDER", {target, result: progress.result});
@@ -92,7 +95,7 @@ async function performScan(tabId, target, bytes, force = false) {
       // Extension API calls and short job polls keep the service worker alive;
       // a long-running OCR fetch could exceed Chromium's fetch lifetime limit.
       await chrome.runtime.getPlatformInfo();
-      await tell(tabId, "NOTICE", {text: progress.status === "queued" ? "Waiting for local Mokuro…" : "Scanning locally · first scan may load models…", pageKey: target.pageKey}).catch(() => {});
+      await tell(tabId, "NOTICE", {text: progress.status === "queued" ? "Waiting for local Mokuro…" : "Scanning locally…", pageKey: target.pageKey}).catch(() => {});
       await pause(1000);
     }
     throw new Error("Scan timed out. Check the local server log and try again.");
@@ -109,6 +112,8 @@ async function performScan(tabId, target, bytes, force = false) {
 async function checkPage(tabId, target, scan = true) {
   const cached = await getPageResult(tabId, target);
   if (cached.result) {
+    // Older extensions cached pages before the reading archive existed.
+    await queueReadingPage(tabId, target, cached.result);
     const checked = await tell(tabId, "VERIFY_OVERLAY", {target, result: cached.result});
     if (!checked.complete) {
       const restored = await tell(tabId, "RENDER", {target, result: cached.result});
@@ -150,7 +155,11 @@ async function launch(message, sender) {
     await chrome.storage.local.set({pairingToken: token});
     return health;
   }
-  if (message.type === "HEALTH") return api("/health");
+  if (message.type === "HEALTH") {
+    const health = await api("/health");
+    void flushReadingLog();
+    return health;
+  }
   const tabId = sender.tab?.id ?? message.tabId;
   if (tabId === undefined) throw new Error("No active tab.");
   if (message.type === "SET_AUTO") {

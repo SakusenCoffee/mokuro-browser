@@ -2,14 +2,23 @@ const status = document.querySelector("#status");
 const error = document.querySelector("#error");
 const auto = document.querySelector("#auto");
 const server = document.querySelector("#server");
+const serverHint = document.querySelector("#server-hint");
+const pairing = document.querySelector("#pairing");
+const pairingCode = document.querySelector("#pairing-code");
+let controlAvailable = false;
+let healthPending = false;
 function showAuto(enabled) {
   auto.setAttribute("aria-pressed", String(enabled));
   auto.textContent = `Auto-scan manga: ${enabled ? "On" : "Off"}`;
 }
 auto.disabled = true;
-chrome.storage.local.get({autoScan: false}).then(settings => {
+chrome.storage.local.get({autoScan: false, pairingToken: ""}).then(settings => {
   showAuto(settings.autoScan);
+  pairingCode.value = settings.pairingToken || "";
   auto.disabled = false;
+});
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes.pairingToken) pairingCode.value = changes.pairingToken.newValue || "";
 });
 auto.onclick = async () => {
   error.textContent = "";
@@ -24,16 +33,37 @@ auto.onclick = async () => {
   finally { auto.disabled = false; }
 };
 function showHealth(reply) {
+  showServer({running: reply.ok});
   status.textContent = reply.ok
-    ? (reply.data.model === "ready" ? "● Local server ready · models loaded" : "● Local server ready · first scan loads models")
-    : reply.error;
-  if (!reply.ok) document.querySelector("#pairing").open = true;
+    ? (reply.data.model === "ready" ? "● Local server ready · models loaded"
+      : reply.data.model === "error" ? "● Connected · models could not load: " + reply.data.model_error
+      : reply.data.model === "loading" ? "● Connected · loading OCR models…"
+      : "● Connected · update the Mokuro Browser launcher for model status and reading history.")
+    : (reply.error?.includes("Automatic pairing is unavailable")
+      ? "Paste the connect code below to check the local server."
+      : reply.error);
+  for (const name of ["cpu", "gpu"]) {
+    const meter = document.querySelector(`#${name}-load`);
+    const value = reply.data?.usage?.[name];
+    meter.parentElement.hidden = !reply.ok || !Number.isFinite(value);
+    meter.textContent = Number.isFinite(value) ? `${Math.round(value)}%` : "";
+  }
+  if (!reply.ok) pairing.open = true;
 }
 function showServer(data) {
   const running = data.running === true;
   server.setAttribute("aria-pressed", String(running));
+  server.setAttribute("data-connected", String(running));
   server.textContent = `Server: ${running ? "On" : "Off"}`;
   if (!running) status.textContent = "● Local server is off";
+}
+async function refreshHealth() {
+  if (healthPending) return;
+  healthPending = true;
+  try {
+    showHealth(await chrome.runtime.sendMessage({type: "HEALTH"}));
+  } catch (failure) { showHealth({ok: false, error: failure.message}); }
+  finally { healthPending = false; }
 }
 async function refreshServer() {
   server.disabled = true;
@@ -41,20 +71,18 @@ async function refreshServer() {
     const reply = await chrome.runtime.sendMessage({type: "SERVER_STATUS"});
     if (!reply.ok) throw new Error(reply.error);
     showServer(reply.data);
-    if (reply.data.running) {
-      let health = await chrome.runtime.sendMessage({type: "HEALTH"});
-      if (!health.ok) {
-        const paired = await chrome.runtime.sendMessage({type: "AUTO_PAIR"});
-        if (paired.ok) health = paired;
-      }
-      showHealth(health);
-    }
+    controlAvailable = true;
+    serverHint.textContent = "Starts and stops the local OCR server. It stays off until you turn it on.";
+    server.disabled = false;
   } catch (failure) {
-    status.textContent = failure.message;
-    server.textContent = "Server: unavailable";
-  } finally { server.disabled = false; }
+    controlAvailable = false;
+    serverHint.textContent = "Open the Mokuro Browser app to start or stop the server. Scanning still works when connected.";
+  }
+  await refreshHealth();
+  server.disabled = !controlAvailable;
 }
 server.onclick = async () => {
+  if (!controlAvailable) return;
   error.textContent = "";
   server.disabled = true;
   try {
@@ -63,17 +91,13 @@ server.onclick = async () => {
     if (!reply.ok) throw new Error(reply.error);
     showServer(reply.data);
     if (reply.data.running) {
-      let health = await chrome.runtime.sendMessage({type: "HEALTH"});
-      if (!health.ok) {
-        const paired = await chrome.runtime.sendMessage({type: "AUTO_PAIR"});
-        if (paired.ok) health = paired;
-      }
-      showHealth(health);
+      await refreshHealth();
     }
   } catch (failure) { error.textContent = failure.message; }
-  finally { server.disabled = false; }
+  finally { server.disabled = !controlAvailable; }
 };
 refreshServer();
+setInterval(refreshHealth, 2000);
 document.querySelector("#pair").onclick = async () => {
   error.textContent = "";
   const button = document.querySelector("#pair");
@@ -82,7 +106,7 @@ document.querySelector("#pair").onclick = async () => {
     const reply = await chrome.runtime.sendMessage({type: "PAIR", token: document.querySelector("#pairing-code").value});
     if (!reply.ok) throw new Error(reply.error);
     showHealth(reply);
-    document.querySelector("#pairing-code").value = "";
+    pairingCode.value = pairingCode.value.trim();
     document.querySelector("#pairing").open = false;
   } catch (failure) { error.textContent = failure.message; }
   finally { button.disabled = false; }

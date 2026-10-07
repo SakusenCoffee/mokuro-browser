@@ -4,6 +4,8 @@ import os
 from pathlib import Path
 import struct
 import subprocess
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError
 from platformdirs import user_data_dir
 
 from installer import core
@@ -30,6 +32,53 @@ def pairing_code(record):
     path = Path(record["native_host"]).with_name("host-config.json")
     config = json.loads(path.read_text(encoding="utf-8"))
     return Path(config["token_file"]).read_text(encoding="utf-8").strip()
+
+
+def host_config(record):
+    return json.loads(Path(record["native_host"]).with_name("host-config.json").read_text(encoding="utf-8"))
+
+
+def settings_path(record):
+    config = host_config(record)
+    return Path(config.get("settings_file") or Path(config["token_file"]).with_name("preferences.json"))
+
+
+def use_gpu(record):
+    try:
+        return json.loads(settings_path(record).read_text(encoding="utf-8")).get("use_gpu", True) is not False
+    except (OSError, ValueError, AttributeError):
+        return True
+
+
+def set_gpu(record, enabled):
+    path = settings_path(record)
+    try:
+        settings = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(settings, dict):
+            settings = {}
+    except (OSError, ValueError):
+        settings = {}
+    settings["use_gpu"] = bool(enabled)
+    core.atomic_write(path, json.dumps(settings, indent=2))
+
+
+def request(record, path, value=None):
+    config = host_config(record)
+    token = Path(config["token_file"]).read_text(encoding="utf-8").strip()
+    body = json.dumps(value, ensure_ascii=False).encode() if value is not None else None
+    message = Request(f"http://127.0.0.1:{config['port']}{path}", data=body,
+                      headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
+    try:
+        with urlopen(message, timeout=10) as response:
+            return json.loads(response.read())
+    except HTTPError as error:
+        if error.code == 404 and path.startswith("/history"):
+            raise RuntimeError("This server does not support reading history. Update the launcher, then stop and restart the server.") from error
+        try:
+            detail = json.loads(error.read()).get("error", str(error))
+        except (ValueError, AttributeError):
+            detail = str(error)
+        raise RuntimeError(detail) from error
 
 
 def control(record, action):

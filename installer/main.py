@@ -52,16 +52,32 @@ def gui(args):
     from tkinter.scrolledtext import ScrolledText
     root = tk.Tk()
     root.title("Mokuro Browser")
-    root.geometry("760x590")
-    root.minsize(640, 500)
-    frame = ttk.Frame(root, padding=20)
-    frame.pack(fill="both", expand=True)
+    assets = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
+    icon = assets / ("payload/icon-128.png" if getattr(sys, "frozen", False) else "extension/icon-128.png")
+    root.app_icon = tk.PhotoImage(file=str(icon))
+    root.iconphoto(True, root.app_icon)
+    root.geometry("900x720")
+    root.minsize(760, 600)
+    notebook = ttk.Notebook(root)
+    notebook.pack(fill="both", expand=True, padx=12, pady=12)
+    frame = ttk.Frame(notebook, padding=20)
+    history_frame = ttk.Frame(notebook, padding=20)
+    notebook.add(frame, text="Server")
+    notebook.add(history_frame, text="Reading history")
     ttk.Label(frame, text="Mokuro Browser", font=("", 22)).pack(anchor="w")
     ttk.Label(frame, text="Launch this app whenever you want to read manga. The local server runs while this window is open.").pack(anchor="w", pady=(8, 12))
     reuse = tk.BooleanVar(value=not args.fresh)
     ttk.Checkbutton(frame, text="Reuse an existing Mokuro / GPU environment when available", variable=reuse).pack(anchor="w")
+    gpu_enabled = tk.BooleanVar(value=True)
+    gpu_toggle = ttk.Checkbutton(frame, text="Use GPU for OCR when available", variable=gpu_enabled,
+                                command=lambda: change_gpu())
+    gpu_toggle.pack(anchor="w", pady=(8, 0))
+    gpu_toggle.configure(state="disabled")
+    ttk.Label(frame, text="Turning this off uses CPU. Changing it restarts the server and reloads the models.").pack(anchor="w")
     server_status = tk.StringVar(value="Checking installation…")
     ttk.Label(frame, textvariable=server_status).pack(anchor="w", pady=(10, 4))
+    load_status = tk.StringVar(value="System load · CPU —   GPU —")
+    ttk.Label(frame, textvariable=load_status).pack(anchor="w", pady=(0, 8))
     code = tk.StringVar()
     code_row = ttk.Frame(frame)
     code_row.pack(fill="x", pady=(0, 8))
@@ -82,7 +98,156 @@ def gui(args):
     running = False
     owned_server = False
     server_pending = False
+    observe_pending = False
+    server_generation = 0
     installed_record = None
+    history_pending = False
+    history_offset = 0
+    history_page_size = 200
+    history_total_lines = 0
+    ttk.Label(history_frame, text="Reading history", font=("", 20)).pack(anchor="w")
+    history_totals = tk.StringVar(value="Characters 0     Words 0     Kanji 0     Kana 0")
+    ttk.Label(history_frame, textvariable=history_totals, font=("", 13)).pack(anchor="w", pady=(12, 4))
+    ttk.Label(history_frame, text="Recognized text, counted once per page. Spaces and punctuation are excluded; words use Japanese segmentation.",
+              wraplength=800).pack(anchor="w", pady=(0, 12))
+    table_frame = ttk.Frame(history_frame)
+    table_frame.pack(fill="both", expand=True)
+    columns = ("text", "characters", "words", "kanji", "kana", "source")
+    history_table = ttk.Treeview(table_frame, columns=columns, show="headings", selectmode="browse")
+    for column, label, width in (("text", "Saved text", 320), ("characters", "Chars", 55), ("words", "Words", 55),
+                                 ("kanji", "Kanji", 55), ("kana", "Kana", 55), ("source", "Page", 170)):
+        history_table.heading(column, text=label)
+        history_table.column(column, width=width, minwidth=45, anchor="w" if column in ("text", "source") else "center")
+    history_scroll = ttk.Scrollbar(table_frame, orient="vertical", command=history_table.yview)
+    history_table.configure(yscrollcommand=history_scroll.set)
+    history_table.pack(side="left", fill="both", expand=True)
+    history_scroll.pack(side="right", fill="y")
+    page_controls = ttk.Frame(history_frame)
+    page_controls.pack(fill="x", pady=8)
+    previous_history = ttk.Button(page_controls, text="Newer lines", command=lambda: history_page(-1))
+    previous_history.pack(side="left")
+    next_history = ttk.Button(page_controls, text="Older lines", command=lambda: history_page(1))
+    next_history.pack(side="left", padx=8)
+    ttk.Button(page_controls, text="Refresh", command=lambda: refresh_history()).pack(side="right")
+    history_note = tk.StringVar(value="Open the server to view your saved reading history.")
+    ttk.Label(history_frame, textvariable=history_note, wraplength=800).pack(anchor="w", pady=(0, 8))
+    ttk.Label(history_frame, text="Edit selected line:").pack(anchor="w")
+    line_editor = ScrolledText(history_frame, height=4, wrap="word")
+    line_editor.pack(fill="x", pady=(4, 8))
+    history_actions = ttk.Frame(history_frame)
+    history_actions.pack(fill="x")
+    save_line = ttk.Button(history_actions, text="Save changes", command=lambda: change_line("edit"))
+    save_line.pack(side="left")
+    delete_line = ttk.Button(history_actions, text="Delete selected line", command=lambda: change_line("delete"))
+    delete_line.pack(side="left", padx=8)
+    save_line.configure(state="disabled")
+    delete_line.configure(state="disabled")
+    history_rows = {}
+    editing_id = None
+
+    def select_line(event=None):
+        nonlocal editing_id
+        selected = history_table.selection()
+        line_id = selected[0] if selected else None
+        if line_id == editing_id:
+            return
+        editing_id = line_id
+        line_editor.delete("1.0", "end")
+        if line_id and line_id in history_rows:
+            line_editor.insert("1.0", history_rows[line_id]["text"])
+        state = "normal" if line_id and not history_pending else "disabled"
+        save_line.configure(state=state)
+        delete_line.configure(state=state)
+
+    history_table.bind("<<TreeviewSelect>>", select_line)
+
+    def refresh_history():
+        nonlocal history_pending
+        if history_pending or not installed_record or running or server_pending:
+            return
+        history_pending = True
+        record, offset = installed_record.copy(), history_offset
+        def work():
+            try:
+                result = launcher.request(record, f"/history?offset={offset}&limit={history_page_size}")
+                messages.put(("history", result))
+            except Exception as error:
+                messages.put(("history_error", "Could not load reading history: " + str(error)))
+        threading.Thread(target=work, daemon=True).start()
+
+    def history_page(direction):
+        nonlocal history_offset
+        if not history_pending:
+            history_offset = max(0, history_offset + direction * history_page_size)
+            refresh_history()
+
+    def change_line(action):
+        nonlocal history_pending
+        selected = history_table.selection()
+        if history_pending or not installed_record or not selected:
+            return
+        line_id = selected[0]
+        value = {"action": action}
+        if action == "edit":
+            value["text"] = line_editor.get("1.0", "end-1c")
+            if not value["text"].strip():
+                history_note.set("Enter some text, or use Delete selected line.")
+                return
+        history_pending = True
+        save_line.configure(state="disabled")
+        delete_line.configure(state="disabled")
+        record = installed_record.copy()
+        def work():
+            try:
+                launcher.request(record, f"/history/{line_id}", value)
+                messages.put(("history_changed", action))
+            except Exception as error:
+                messages.put(("history_error", "Could not change the saved line: " + str(error)))
+        threading.Thread(target=work, daemon=True).start()
+
+    def show_server(result):
+        active, health = result["running"], result.get("health", {})
+        if not active:
+            server_status.set("Server is off")
+        elif health.get("model") == "ready":
+            device = health.get("device", "") or ""
+            mode = "GPU" if device.startswith(("cuda", "mps")) else "CPU"
+            server_status.set(f"Server running · models ready · {mode}")
+        elif health.get("model") == "error":
+            server_status.set("Server running · models could not load: " + str(health.get("model_error", "")))
+        elif health.get("model") == "loading":
+            server_status.set("Server running · loading OCR models…")
+        else:
+            server_status.set("Server running · older server detected. Stop and restart it using this launcher.")
+        usage = health.get("usage", {})
+        def percent(value):
+            return f"{value:.0f}%" if isinstance(value, (int, float)) else "unavailable"
+        load_status.set(f"System load · CPU {percent(usage.get('cpu'))}   GPU {percent(usage.get('gpu'))}" if active
+                        else "System load · CPU —   GPU —")
+
+    def change_gpu():
+        nonlocal server_pending, server_generation
+        if running or server_pending or not installed_record:
+            return
+        server_pending = True
+        server_generation += 1
+        gpu_toggle.configure(state="disabled")
+        server_button.configure(state="disabled")
+        server_status.set("Applying GPU setting and reloading models…")
+        record, enabled = installed_record.copy(), gpu_enabled.get()
+        def work():
+            try:
+                launcher.set_gpu(record, enabled)
+                active = launcher.control(record, "status")["running"]
+                if active:
+                    launcher.control(record, "stop")
+                    result = launcher.control(record, "start")
+                else:
+                    result = {"running": False}
+                messages.put(("server", ("start" if active else "stop", result, active)))
+            except Exception as error:
+                messages.put(("server_error", str(error)))
+        threading.Thread(target=work, daemon=True).start()
     progress = ttk.Progressbar(frame, mode="indeterminate")
     progress.pack(fill="x", before=output, pady=(0, 8))
     def write(text):
@@ -94,13 +259,17 @@ def gui(args):
         nonlocal installed_record
         installed_record = record
         code.set(launcher.pairing_code(record))
+        gpu_enabled.set(launcher.use_gpu(record))
+        gpu_toggle.configure(state="normal")
         server_status.set("Server is off")
     def server_action(action):
-        nonlocal server_pending
+        nonlocal server_pending, server_generation
         if server_pending or not installed_record:
             return
         server_pending = True
+        server_generation += 1
         server_button.configure(state="disabled")
+        gpu_toggle.configure(state="disabled")
         server_status.set("Starting server…" if action == "start" else "Stopping server…")
         record = installed_record.copy()
         def work():
@@ -112,14 +281,16 @@ def gui(args):
                 messages.put(("server_error", str(error)))
         threading.Thread(target=work, daemon=True).start()
     def start(removing=False):
-        nonlocal running
+        nonlocal running, server_generation
         if running or server_pending:
             return
         running = True
+        server_generation += 1
         progress.start()
         install_button.configure(state="disabled")
         remove_button.configure(state="disabled")
         server_button.configure(state="disabled")
+        gpu_toggle.configure(state="disabled")
         args.uninstall, args.fresh = removing, not reuse.get()
         def work():
             try:
@@ -139,7 +310,7 @@ def gui(args):
     server_button.pack(side="left", padx=10)
     server_button.configure(state="disabled")
     def poll():
-        nonlocal running, owned_server, server_pending, installed_record
+        nonlocal running, owned_server, server_pending, installed_record, history_pending, history_total_lines, observe_pending
         while not messages.empty():
             kind, value = messages.get_nowait()
             if kind == "log":
@@ -153,22 +324,64 @@ def gui(args):
                     owned_server = True
                 if not active:
                     owned_server = False
-                server_status.set("Server running · extension can scan" if active else "Server is off")
+                show_server(result)
                 server_button.configure(text="Stop server" if active else "Start server", state="normal")
+                gpu_toggle.configure(state="normal")
+                refresh_history()
                 continue
             if kind == "server_error":
                 server_pending = False
                 server_status.set("Server could not start")
                 server_button.configure(state="normal")
+                gpu_toggle.configure(state="normal")
                 write("Server error: " + value)
                 continue
             if kind == "observed":
-                if not server_pending and not running:
-                    active = value
+                observe_pending = False
+                generation, result = value
+                if generation == server_generation and not server_pending and not running:
+                    active = result["running"]
                     if not active:
                         owned_server = False
-                    server_status.set("Server running · extension can scan" if active else "Server is off")
+                    show_server(result)
                     server_button.configure(text="Stop server" if active else "Start server", state="normal")
+                continue
+            if kind == "history":
+                history_pending = False
+                history_total_lines = value["totals"]["lines"]
+                totals = value["totals"]
+                history_totals.set("     ".join(f"{name.title()} {totals[name]:,}" for name in ("characters", "words", "kanji", "kana")))
+                new_rows = {str(row["id"]): row for row in value["lines"]}
+                for line_id in history_table.get_children():
+                    if line_id not in new_rows:
+                        history_table.delete(line_id)
+                for position, (line_id, row) in enumerate(new_rows.items()):
+                    values = (row["text"], row["characters"], row["words"], row["kanji"], row["kana"], row["title"])
+                    if history_table.exists(line_id):
+                        history_table.item(line_id, values=values)
+                        history_table.move(line_id, "", position)
+                    else:
+                        history_table.insert("", position, iid=line_id, values=values)
+                history_rows.clear()
+                history_rows.update(new_rows)
+                previous_history.configure(state="normal" if history_offset else "disabled")
+                next_history.configure(state="normal" if history_offset + history_page_size < history_total_lines else "disabled")
+                history_note.set(f"{history_total_lines:,} saved lines across {totals['pages']:,} pages · totals update when you edit or delete a line.")
+                select_line()
+                if history_table.selection():
+                    save_line.configure(state="normal")
+                    delete_line.configure(state="normal")
+                continue
+            if kind in ("history_changed", "history_error"):
+                history_pending = False
+                if kind == "history_changed":
+                    history_note.set("Changes saved." if value == "edit" else "Saved line deleted.")
+                    refresh_history()
+                else:
+                    history_note.set(value)
+                    if history_table.selection():
+                        save_line.configure(state="normal")
+                        delete_line.configure(state="normal")
                 continue
             if kind == "closed":
                 root.destroy()
@@ -198,6 +411,7 @@ def gui(args):
                 code.set("")
                 server_status.set("Not installed")
                 server_button.configure(state="disabled")
+                gpu_toggle.configure(state="disabled")
                 write("Uninstall complete.")
             else:
                 record = launcher.installed(args.root)
@@ -210,15 +424,20 @@ def gui(args):
                 server_action("start")
         root.after(100, poll)
     def refresh_server():
-        if installed_record and not running and not server_pending:
-            record = installed_record.copy()
+        nonlocal observe_pending
+        if installed_record and not running and not server_pending and not observe_pending:
+            observe_pending = True
+            record, generation = installed_record.copy(), server_generation
             def work():
                 try:
-                    messages.put(("observed", launcher.control(record, "status")["running"]))
+                    messages.put(("observed", (generation, {"running": True, "health": launcher.request(record, "/health")})))
                 except (OSError, RuntimeError, ValueError, subprocess.SubprocessError):
-                    messages.put(("observed", False))
+                    messages.put(("observed", (generation, {"running": False})))
             threading.Thread(target=work, daemon=True).start()
-        root.after(4000, refresh_server)
+        if notebook.select() == str(history_frame):
+            refresh_history()
+        root.after(2500, refresh_server)
+    notebook.bind("<<NotebookTabChanged>>", lambda event: refresh_history() if notebook.select() == str(history_frame) else None)
     def close():
         nonlocal server_pending
         if running or server_pending:

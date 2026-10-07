@@ -8,7 +8,7 @@ const token = 'test-pairing-code-with-at-least-32-characters';
 let offline = false;
 const nativeActions = [];
 const context = vm.createContext({
-  setTimeout, AbortSignal, importScripts() {},
+  setTimeout, AbortSignal, importScripts() {}, flushReadingLog: async () => {},
   fetch: async (url, options) => {
     if (offline) throw new Error('offline');
     assert.equal(url, 'http://127.0.0.1:8766/health');

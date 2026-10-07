@@ -145,6 +145,7 @@
       const [x1, y1, x2, y2] = block.box;
       const box = document.createElement("div"); box.className = "block";
       Object.assign(box.style, {left: `${x1}px`, top: `${y1}px`, width: `${x2-x1}px`, height: `${y2-y1}px`});
+      const lines = [];
       for (let index = 0; index < block.lines.length; index++) {
         const text = block.lines[index];
         if (!text) continue;
@@ -154,7 +155,17 @@
         const width = Math.max(...poly.map(point => point[0])) - left;
         const height = Math.max(...poly.map(point => point[1])) - top;
         const units = [...text].reduce((sum, char) => sum + (/[^\u0000-\u00ff]/.test(char) ? 1 : .5), 0);
-        const font = Math.max(3, Math.min(block.font_size, (block.vertical ? height : width) / (units * 1.03 || 1)));
+        // A short column must still fit its detected width. Using only its
+        // length makes two-character columns grow across neighbouring text.
+        const across = block.vertical ? width : height;
+        const along = block.vertical ? height : width;
+        const font = Math.max(1, Math.min(block.font_size, across / 1.1, along / (units * 1.03 || 1)));
+        lines.push({text, left, top, width, height, font});
+      }
+      // Lines in one detected text block share a type size. Otherwise a short
+      // phrase grows much larger than its longer neighbours on hover.
+      const font = Math.min(...lines.map(line => line.font));
+      for (const {text, left, top, width, height} of lines) {
         const line = document.createElement("p"); line.className = "line"; line.textContent = text;
         Object.assign(line.style, {left: `${left-x1}px`, top: `${top-y1}px`, width: `${width}px`,
           height: `${height}px`, fontSize: `${font}px`, writingMode: block.vertical ? "vertical-rl" : "horizontal-tb"});

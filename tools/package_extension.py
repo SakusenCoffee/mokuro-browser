@@ -4,8 +4,9 @@ import json
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-FILES = ("manifest.json", "background.js", "content.js", "page-cache.js",
-         "ocr-result.js", "popup.html", "popup.js", "popup.css")
+FILES = ("manifest.json", "background.js", "content.js", "page-cache.js", "reading-history.js",
+         "ocr-result.js", "popup.html", "popup.js", "popup.css",
+         "icon-16.png", "icon-32.png", "icon-48.png", "icon-128.png")
 
 def main():
     version = json.loads((ROOT / "extension/manifest.json").read_text())["version"]

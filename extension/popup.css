@@ -1,22 +1,30 @@
-:root { color-scheme: light; font-family: system-ui, sans-serif; color: #183c3a; background: #f8f6ef; }
+:root { color-scheme: dark; font-family: system-ui, sans-serif; color: #eef4f2; background: #171e22; }
 body { width: 302px; margin: 0; padding: 20px; }
 header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
-.mark { font-size: 26px; display: grid; place-items: center; width: 45px; height: 45px; border-radius: 12px; background: #dfece6; }
+.mark { width: 48px; height: 48px; object-fit: cover; border-radius: 10px; background: #edf0eb; }
 h1 { font-size: 19px; margin: 0 0 3px; letter-spacing: -.4px; }
-header p { margin: 0; color: #677973; font-size: 11px; }
-#status { font-size: 12px; padding: 10px 12px; background: #edece3; border-radius: 8px; margin-bottom: 14px; line-height: 1.5; }
-button { display: block; box-sizing: border-box; width: 100%; margin: 8px 0; padding: 12px; background: #fffdf8; color: #183c3a; border: 1px solid #d4dace; border-radius: 9px; font: 600 13px system-ui; cursor: pointer; }
-button:hover { border-color: #548778; background: #edf4ee; }
-.primary { background: #225c50; border-color: #225c50; color: white; }
-.primary:hover { background: #194b40; color: white; }
-#auto[aria-pressed="true"] { background: #dfece6; border-color: #225c50; }
-#server[aria-pressed="true"] { background: #dfece6; border-color: #225c50; }
-.auto-hint { font-size: 11px; line-height: 1.5; color: #6b7871; margin: 4px 0 14px; }
-.quiet { background: transparent; border-color: transparent; font-weight: 400; color: #63736c; padding: 6px; }
-.hint { font-size: 11px; line-height: 1.6; color: #6b7871; margin: 16px 0 8px; }
-.shortcut { font-size: 10px; color: #809087; }
-#error { color: #a53428; font-size: 12px; line-height: 1.5; }
-details { font-size: 12px; margin-bottom: 12px; }
-summary { cursor: pointer; }
+header p { margin: 0; color: #acbcb7; font-size: 11px; }
+#status { font-size: 12px; padding: 11px 12px; background: #263137; border: 1px solid #394a50; border-radius: 8px; margin-bottom: 14px; line-height: 1.5; }
+button { display: block; box-sizing: border-box; width: 100%; margin: 8px 0; padding: 12px; background: #29353a; color: #eef4f2; border: 1px solid #4b5b5d; border-radius: 9px; font: 600 13px system-ui; cursor: pointer; }
+button:hover:not(:disabled) { border-color: #75b7a4; background: #344b4a; }
+button:disabled { cursor: default; opacity: .75; }
+button:focus-visible, summary:focus-visible, input:focus-visible { outline: 2px solid #94d9c4; outline-offset: 2px; }
+.primary { background: #367b6b; border-color: #367b6b; color: white; }
+.primary:hover:not(:disabled) { background: #469582; color: white; }
+#auto[aria-pressed="true"], #server[aria-pressed="true"] { background: #294a43; border-color: #68ab97; }
+#server[data-connected="true"] { opacity: 1; border-color: #73df9d; box-shadow: 0 0 7px #59e99170, 0 0 18px #59e99130; }
+.loads { display: flex; justify-content: space-between; gap: 12px; padding: 4px 3px 8px; font-size: 11px; color: #a8b9b4; }
+.loads strong { color: #eef4f2; margin-left: 5px; font-weight: 600; }
+.auto-hint { font-size: 11px; line-height: 1.5; color: #a8b9b4; margin: 4px 0 14px; }
+.quiet { background: transparent; border-color: transparent; font-weight: 400; color: #a8b9b4; padding: 6px; }
+.hint { font-size: 11px; line-height: 1.6; color: #acbcb7; margin: 12px 0 8px; }
+.shortcut { font-size: 10px; color: #9caeaa; }
+#error { color: #ffb2a9; font-size: 12px; line-height: 1.5; }
+details { font-size: 12px; margin: 16px 0; padding: 0 12px 12px; border: 1px solid #5d8278; border-radius: 9px; background: #243832; }
+summary { display: flex; justify-content: space-between; align-items: center; margin: 0 -12px; padding: 13px 12px; color: #d9f7eb; font-size: 13px; font-weight: 700; cursor: pointer; list-style: none; }
+summary::-webkit-details-marker { display: none; }
+.pair-arrow { font-size: 16px; transition: transform .15s; }
+details[open] .pair-arrow { transform: rotate(180deg); }
 label { display: block; margin-bottom: 5px; }
-input { box-sizing: border-box; width: 100%; padding: 8px; }
+input { box-sizing: border-box; width: 100%; padding: 9px; color: #eef4f2; background: #172421; border: 1px solid #658b7f; border-radius: 7px; }
+#pair { background: #397e6e; border-color: #68ab97; }

@@ -65,7 +65,16 @@ def main():
                "--workpath", str(ROOT / "build/pyinstaller"), "--specpath", str(ROOT / "build"),
                "--paths", str(ROOT), "--add-data", f"{wheel}{os.pathsep}payload",
                "--add-data", f"{licenses}{os.pathsep}payload/licenses", "--add-binary", f"{binary}{os.pathsep}payload",
-               "--add-binary", f"{native_host}{os.pathsep}payload"]
+               "--add-binary", f"{native_host}{os.pathsep}payload",
+               "--add-data", f"{ROOT / 'extension/icon-128.png'}{os.pathsep}payload"]
+    if sys.platform in ("win32", "darwin"):
+        # Native executable/bundle icons and the Tk window share the extension artwork.
+        from PIL import Image
+        suffix = "ico" if sys.platform == "win32" else "icns"
+        icon = payload / f"mokuro-browser.{suffix}"
+        with Image.open(ROOT / "extension/icon-128.png") as artwork:
+            artwork.resize((256, 256)).save(icon)
+        options.extend(["--icon", str(icon)])
     if sys.platform in ("win32", "darwin") and not args.console:
         options.append("--windowed")
     if args.codesign_identity:

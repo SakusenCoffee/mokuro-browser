@@ -14,6 +14,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from installer import core, launcher
 
 class InstallerTests(unittest.TestCase):
+    def test_gpu_preference_survives_reopening_and_defaults_to_enabled(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            host = root / "native-host"
+            token = root / "token"
+            (root / "host-config.json").write_text(json.dumps({"token_file": str(token)}))
+            record = {"native_host": str(host)}
+            self.assertTrue(launcher.use_gpu(record))
+            launcher.set_gpu(record, False)
+            self.assertFalse(launcher.use_gpu(record))
+            self.assertFalse(json.loads((root / "preferences.json").read_text())["use_gpu"])
+            launcher.set_gpu(record, True)
+            self.assertTrue(launcher.use_gpu(record))
     def test_previous_install_can_still_stop_its_server_during_upgrade(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "install"

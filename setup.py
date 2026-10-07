@@ -10,8 +10,9 @@ class BuildWithExtension(build_py):
         source = Path(__file__).parent / "extension"
         destination = Path(self.build_lib) / "mokuro_browser/extension"
         destination.mkdir(parents=True, exist_ok=True)
-        for name in ("manifest.json", "background.js", "content.js", "page-cache.js",
-                     "ocr-result.js", "popup.html", "popup.js", "popup.css"):
+        for name in ("manifest.json", "background.js", "content.js", "page-cache.js", "reading-history.js",
+                     "ocr-result.js", "popup.html", "popup.js", "popup.css",
+                     "icon-16.png", "icon-32.png", "icon-48.png", "icon-128.png"):
             shutil.copyfile(source / name, destination / name)
 
 setup(cmdclass={"build_py": BuildWithExtension})

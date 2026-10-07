@@ -70,6 +70,7 @@ class MangaPageOcr:
             )
             self.mocr = MangaOcr(cached_model_path(pretrained_model_name_or_path), force_cpu)
             self.mocr.model.eval()
+            self.device = str(self.mocr.model.device)
             if self.ocr_batch_size is None:
                 self.ocr_batch_size = 8 if device == "cuda" else 1
 

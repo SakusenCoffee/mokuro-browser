@@ -4,6 +4,9 @@ from pathlib import Path
 import sys
 import threading
 import time
+import tempfile
+from types import SimpleNamespace
+from unittest import mock
 import unittest
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -12,6 +15,7 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
 from mokuro_browser import server
+from mokuro_browser.history import ReadingHistory
 
 
 class ServerTests(unittest.TestCase):
@@ -28,7 +32,9 @@ class ServerTests(unittest.TestCase):
                             "blocks": [{"lines": ["日本語"]}]}
             return scan
         cls.engine = server.OcrEngine(loader)
-        cls.http = server.make_server("test-token-with-at-least-32-characters", 0, cls.engine)
+        cls.directory = tempfile.TemporaryDirectory()
+        cls.http = server.make_server("test-token-with-at-least-32-characters", 0, cls.engine,
+                                     ReadingHistory(Path(cls.directory.name) / "history.sqlite3"))
         cls.base = f"http://127.0.0.1:{cls.http.server_port}"
         threading.Thread(target=cls.http.serve_forever, daemon=True).start()
 
@@ -36,6 +42,7 @@ class ServerTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.http.shutdown()
         cls.http.server_close()
+        cls.directory.cleanup()
 
     def request(self, path, data=None, headers=None, method=None):
         request_headers = {"Authorization": f"Bearer {self.http.token}"}
@@ -65,6 +72,52 @@ class ServerTests(unittest.TestCase):
 
     def test_authentication_is_required(self):
         self.assertEqual(self.request("/health", headers={"Authorization": ""})[0], 401)
+        self.assertEqual(self.request("/history", headers={"Authorization": ""})[0], 401)
+
+    def test_models_load_before_any_scan_and_health_stays_responsive(self):
+        entered, release = threading.Event(), threading.Event()
+        def loader():
+            entered.set()
+            release.wait(3)
+            return lambda path: {}
+        engine = server.OcrEngine(loader)
+        try:
+            self.assertTrue(entered.wait(1), "Model loading must start without an image")
+            self.assertEqual(engine.status()["model"], "loading")
+        finally:
+            release.set()
+        deadline = time.monotonic() + 2
+        while engine.status()["model"] != "ready" and time.monotonic() < deadline:
+            time.sleep(.01)
+        self.assertEqual(engine.status()["model"], "ready")
+
+    def test_saved_gpu_setting_is_used_when_server_launches(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            settings = folder / "preferences.json"
+            settings.write_text('{"use_gpu":false}')
+            args = SimpleNamespace(port=8766, ocr_batch_size=None, force_cpu=False, log_file=None,
+                                   token_file=folder / "token", settings_file=settings, history_file=folder / "history.sqlite3")
+            http = mock.Mock()
+            http.serve_forever.side_effect = KeyboardInterrupt
+            with mock.patch.object(server, "load_mokuro") as load, \
+                 mock.patch.object(server, "OcrEngine", side_effect=lambda loader: loader()), \
+                 mock.patch.object(server, "make_server", return_value=http):
+                server.serve(args)
+                load.assert_called_once_with(force_cpu=True, ocr_batch_size=None)
+                http.server_close.assert_called_once()
+
+    def test_history_api_persists_edits_and_deletions(self):
+        value = {"page_id": "c" * 64, "source_key": "test-page", "lines": ["日本語。", "かな！"], "title": "Test"}
+        self.assertEqual(self.request("/history", json.dumps(value).encode())[0], 200)
+        _, saved, _ = self.request("/history")
+        line_id = saved["lines"][0]["id"]
+        self.assertEqual(saved["totals"]["characters"], 5)
+        self.assertEqual(self.request(f"/history/{line_id}", json.dumps({"action": "edit", "text": "猫！"}).encode())[0], 200)
+        self.assertEqual(self.request("/history")[1]["totals"]["characters"], 4)
+        self.assertEqual(self.request(f"/history/{line_id}", b'{"action":"delete"}')[0], 200)
+        self.assertFalse(self.request("/history", json.dumps(value).encode())[1]["saved"])
+        self.assertEqual(self.request("/history")[1]["totals"]["characters"], 3)
 
     def test_website_origin_is_rejected_even_with_token(self):
         code, _, headers = self.request("/health", headers={"Origin": "https://example.com"})

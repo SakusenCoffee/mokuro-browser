@@ -66,6 +66,7 @@ def native_manifest_roots(home=None, platform=None):
     return {
         "chrome": [config / "google-chrome/NativeMessagingHosts"],
         "chromium": [config / "chromium/NativeMessagingHosts"],
+        "brave": [config / "BraveSoftware/Brave-Browser/NativeMessagingHosts"],
         "edge": [config / "microsoft-edge/NativeMessagingHosts"],
         "firefox": [home / ".mozilla/native-messaging-hosts"],
     }
@@ -165,6 +166,8 @@ def install_native_host(helper=None, register=True, root=None, roots=None):
     pairing_token(token_file)
     config = {"version": 1, "python": str(Path(sys.executable).absolute()),
               "token_file": str(token_file), "log_file": str(log_dir() / "server.log"),
+              "settings_file": str(config_dir() / "preferences.json"),
+              "history_file": str(data_dir() / "reading-history.sqlite3"),
               "port": 8766}
     atomic_write(host_config_path(root), json.dumps(config, indent=2) + "\n")
     if register:
@@ -220,8 +223,12 @@ def start(config):
                                      subprocess.CREATE_NO_WINDOW)
     else:
         options["start_new_session"] = True
-    subprocess.Popen([config["python"], "-m", "mokuro_browser", "serve", "--port", str(config["port"]),
-                      "--token-file", config["token_file"], "--log-file", config["log_file"]], **options)
+    command = [config["python"], "-m", "mokuro_browser", "serve", "--port", str(config["port"]),
+               "--token-file", config["token_file"], "--log-file", config["log_file"]]
+    for key in ("settings_file", "history_file"):
+        if config.get(key):
+            command.extend(["--" + key.replace("_", "-"), config[key]])
+    subprocess.Popen(command, **options)
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline:
         time.sleep(.15)
