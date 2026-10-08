@@ -6,7 +6,7 @@ import platform
 import subprocess
 import sys
 import zipfile
-from installer.core import child_environment
+from installer.core import child_environment, default_root
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
@@ -56,6 +56,17 @@ def available(current, opener=urlopen, system=None, machine=None):
     if not asset or not isinstance(asset.get("browser_download_url"), str):
         return None
     return {"version": version, "name": name, "url": asset["browser_download_url"], "size": int(asset.get("size") or 0)}
+
+
+def destination(update, current=None, root=None, environment=None, system=None):
+    """Replace a writable AppImage; keep other platform updates privately."""
+    system = system or sys.platform
+    environment = environment or os.environ
+    current = Path(current or environment.get("APPIMAGE")
+                   or (sys.executable if getattr(sys, "frozen", False) else sys.argv[0])).absolute()
+    if system.startswith("linux") and current.suffix.lower() == ".appimage" and os.access(current.parent, os.W_OK):
+        return current
+    return Path(root or default_root()) / "updates" / update["name"]
 
 
 def download(update, destination, opener=urlopen):

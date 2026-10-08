@@ -1,6 +1,5 @@
-- Fixed overlapping OCR regions discarding cover lettering.
-- Improved small-kana recognition in cover text.
-- Fixed auto-scan on other reader sites and when toggled on.
-- Cleared outdated scan caches in extension 1.6.2.
+- Fixed AppImage update detection after v0.1.12.
+- Always shows launcher update status.
+- Prevents reinstalling an already-current OCR environment.
 
-Update the launcher and extension, restart the server, and rescan.
+Download this launcher once. Future launcher updates appear in the app.

@@ -362,6 +362,10 @@ def gui(args):
     def show_installation(record):
         nonlocal installed_record
         installed_record = record
+        if record.get("version") == bundled_version():
+            install_button.configure(text=f"Installed · {bundled_version()}", state="disabled")
+        else:
+            install_button.configure(text="Install / update", state="normal")
         code.set(launcher.pairing_code(record))
         gpu_enabled.set(launcher.use_gpu(record))
         gpu_toggle.configure(state="normal")
@@ -425,14 +429,11 @@ def gui(args):
     dashboard_button.pack(side="right")
     dashboard_button.configure(state="disabled")
     update_info = None
-    update_button = ttk.Button(buttons, text="Update launcher")
+    update_button = ttk.Button(buttons, text="Checking launcher…", state="disabled")
+    update_button.pack(side="right", padx=(0, 8))
 
     def update_destination(info):
-        current = Path(sys.executable if getattr(sys, "frozen", False) else sys.argv[0]).absolute()
-        if (sys.platform.startswith("linux") and current.suffix == ".AppImage"
-                and os.access(current.parent, os.W_OK)):
-            return current
-        return core.default_root() / "updates" / info["name"]
+        return updater.destination(info)
 
     def apply_update():
         nonlocal update_info
@@ -452,6 +453,7 @@ def gui(args):
     update_button.configure(command=apply_update)
 
     def check_for_update():
+        update_button.configure(text="Checking launcher…", state="disabled")
         def work():
             try:
                 messages.put(("update_available", updater.available(bundled_version())))
@@ -473,12 +475,14 @@ def gui(args):
             if kind == "update_available":
                 update_info = value
                 if value:
-                    update_button.configure(text=f"Update launcher · {value['version']}")
-                    update_button.pack(side="right", padx=(0, 8))
+                    update_button.configure(text=f"Update launcher · {value['version']}",
+                                            state="normal", command=apply_update)
                     write(f"Launcher update {value['version']} is available. The browser extension will stay as installed.")
+                else:
+                    update_button.configure(text=f"Launcher current · {bundled_version()}", state="disabled")
                 continue
             if kind == "update_check_error":
-                # An unavailable network must not affect reading or OCR.
+                update_button.configure(text="Check launcher update", state="normal", command=check_for_update)
                 continue
             if kind == "update_error":
                 update_button.configure(state="normal", text="Retry launcher update")
@@ -605,6 +609,7 @@ def gui(args):
                 server_button.configure(state="disabled")
                 reader_state(False)
                 gpu_toggle.configure(state="disabled")
+                install_button.configure(text="Install / update", state="normal")
                 write("Uninstall complete.")
             else:
                 record = launcher.installed(args.root)
