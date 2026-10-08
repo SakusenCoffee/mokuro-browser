@@ -33,6 +33,7 @@ jobs:
           node-version: '22'
       - run: node tests/test-pairing.mjs
       - run: node tests/test-popup.mjs
+      - run: node tests/test-auto.mjs
       - run: npx --yes web-ext@8.4.0 lint --source-dir extension
       - uses: actions/upload-artifact@v4
         with:

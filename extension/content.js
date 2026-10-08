@@ -341,21 +341,15 @@
 
   function mangaImage() {
     return visibleImages().find(({image, area}) => {
-      const ratio = image.naturalWidth / image.naturalHeight;
-      if (!image.complete || area < 40000 || image.naturalWidth < 350 || image.naturalHeight < 600 || ratio < .35 || ratio > 2.4) return false;
-      const ancestors = [];
-      for (let node = image, depth = 0; node && depth < 4; node = node.parentElement, depth++) {
-        ancestors.push(node.id, node.className);
-      }
-      const context = [document.title, location.hostname, location.pathname, image.alt, image.currentSrc || image.src, ...ancestors].join(" ");
-      // Require reader/manga cues as well as page-sized geometry. A large
-      // photo on an unrelated site should not automatically start OCR.
-      return /manga|manhwa|manhua|comic|chapter|reader|漫画|マンガ|コミック|第\s*\d+\s*[話巻]/i.test(context);
+      // Auto is opt-in. Reader URLs, CDN filenames and image classes need not
+      // mention manga; long strips and landscape pages are valid too.
+      return image.complete && area >= 40000 && image.naturalWidth >= 300 && image.naturalHeight >= 300;
     })?.image;
   }
 
   function scheduleAuto(delay = 650) {
-    clearTimeout(autoTimer);
+    // A busy page must not postpone scanning indefinitely with DOM mutations.
+    if (autoTimer != null) return;
     autoTimer = setTimeout(scanAuto, delay);
   }
 
@@ -406,8 +400,12 @@
     if (autoEnabled) {
       attempted.clear();
       retryAfter = 0;
+      clearedKey = null;
+      missingKey = null;
     }
-    scheduleAuto();
+    clearTimeout(autoTimer);
+    autoTimer = null;
+    scheduleAuto(0);
   }
 
   chrome.storage.local.get({autoScan: false, hoverFontPercent: 100}).then(settings => {
