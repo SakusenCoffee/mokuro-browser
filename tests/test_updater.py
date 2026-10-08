@@ -4,6 +4,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+import zipfile
 from types import SimpleNamespace
 from unittest import mock
 
@@ -49,6 +50,23 @@ class UpdaterTests(unittest.TestCase):
             self.assertFalse(destination.with_suffix(".AppImage.part").exists())
             with self.assertRaisesRegex(ValueError, "redirected"):
                 updater.download(update, destination, lambda request, timeout: Response(b"data", "https://example.com/file"))
+            with self.assertRaisesRegex(ValueError, "redirected"):
+                updater.download(update, destination, lambda request, timeout: Response(b"data", "https://notgithub.com/file"))
+
+    @unittest.skipIf(sys.platform == "win32", "POSIX executable permissions")
+    def test_mac_archive_restores_executable_permission(self):
+        with tempfile.TemporaryDirectory() as directory:
+            archive_path = Path(directory) / "mac.zip"
+            entry = zipfile.ZipInfo("MokuroBrowserSetup.app/Contents/MacOS/MokuroBrowserSetup")
+            entry.external_attr = 0o100755 << 16
+            with zipfile.ZipFile(archive_path, "w") as archive:
+                archive.writestr(entry, b"launcher")
+            with mock.patch.object(updater.subprocess, "run") as run, \
+                 mock.patch.object(updater.subprocess, "Popen"):
+                updater.launch_update(archive_path)
+                executable = Path(run.call_args.args[0][0])
+                self.assertTrue(executable.stat().st_mode & 0o100)
+
 
     def test_launcher_only_update_does_not_export_browser_extension(self):
         args = SimpleNamespace(uninstall=False, root=None, bin_dir=None, fresh=False, python=None,

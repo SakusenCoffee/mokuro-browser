@@ -43,7 +43,7 @@ def normalize_image(data):
             Image.DecompressionBombWarning) as error:
         raise ValueError("Send a valid PNG, JPEG, WebP or other supported image.") from error
     output = io.BytesIO()
-    image.save(output, format="PNG")
+    image.save(output, format="PNG", compress_level=1)
     return output.getvalue()
 
 
@@ -75,6 +75,10 @@ class OcrEngine:
                         len(self.jobs) >= 20 or time.time() - self.jobs[key]["created"] > 1800):
                     del self.jobs[key]
             job = {"id": job_id, "page_id": digest, "status": "queued", "created": time.time()}
+            if not force:
+                for pending_job in self.jobs.values():
+                    if pending_job["page_id"] == digest and pending_job["status"] in ("queued", "processing"):
+                        return pending_job.copy()
             if not force and digest in self.results:
                 job.update(status="complete", result=self.results[digest], cached=True)
                 self.results.move_to_end(digest)
@@ -121,10 +125,13 @@ class OcrEngine:
                 if self.model is None:
                     self.load()
                 started = time.monotonic()
-                with tempfile.TemporaryDirectory(prefix="mokuro-browser-") as directory:
-                    path = Path(directory) / "page.png"
-                    path.write_bytes(image)
-                    result = self.model(str(path))
+                if hasattr(self.model, "recognize_bytes"):
+                    result = self.model.recognize_bytes(image)
+                else:
+                    with tempfile.TemporaryDirectory(prefix="mokuro-browser-") as directory:
+                        path = Path(directory) / "page.png"
+                        path.write_bytes(image)
+                        result = self.model(str(path))
                 # Mokuro's box coordinates contain NumPy scalar values.
                 from comic_text_detector.utils.io_utils import NumpyEncoder
                 result = json.loads(json.dumps(result, cls=NumpyEncoder))

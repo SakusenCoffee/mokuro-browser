@@ -66,9 +66,9 @@ def main_test():
                 failures.append(error)
                 window.destroy()
 
-        def create_root():
+        def create_root(*args, **kwargs):
             nonlocal window
-            window = original_root()
+            window = original_root(*args, **kwargs)
             window.after(700, lambda: check(lambda: inspect_server(window)))
             return window
 

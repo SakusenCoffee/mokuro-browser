@@ -15,6 +15,7 @@ import time
 import uuid
 
 from platformdirs import user_data_dir
+from installer.windows_runtime import ensure_runtime
 
 APP = "mokuro-browser-installer"
 MARKER = "mokuro-browser-managed-install-v1"
@@ -273,7 +274,11 @@ print(json.dumps({"version":__version__,"extension":str(export_extension()) if e
 
 def install(uv, wheel, *, root=None, bin_dir=None, reuse=True, python=None,
             autostart=False, modify_path=True, state_dir=None, home=None, native_host=None,
-            export_browser_extension=True, log=print):
+            export_browser_extension=True, log=print, progress=None):
+    def stage(value, message):
+        log(message)
+        if progress:
+            progress(value, message)
     root, bin_dir = Path(root or default_root()).absolute(), Path(bin_dir or default_bin()).absolute()
     if state_dir and autostart:
         raise ValueError("Isolated test state requires --no-autostart.")
@@ -284,7 +289,9 @@ def install(uv, wheel, *, root=None, bin_dir=None, reuse=True, python=None,
         if state_dir:
             environment["MOKURO_BROWSER_HOME"] = str(Path(state_dir).absolute())
         run = Runner(log, environment)
-        log("Looking for an existing Mokuro installation…")
+        stage(2, "Checking system prerequisites…")
+        ensure_runtime(log, progress)
+        stage(10, "Looking for an existing Mokuro installation…")
         existing = find_existing(run, previous, python) if reuse or python else None
         venv = root / "envs" / uuid.uuid4().hex
         command = [uv, "venv", "--seed", "--python", existing["python"] if existing else "3.12"]
@@ -295,8 +302,10 @@ def install(uv, wheel, *, root=None, bin_dir=None, reuse=True, python=None,
             log("Installing private Python 3.12 and Mokuro dependencies. This can take several minutes.")
             command.append("--managed-python")
         try:
+            stage(20, "Preparing Python…")
             run([*command, venv])
             interpreter = env_python(venv)
+            stage(35, "Downloading and installing OCR dependencies — this can take several minutes…")
             if existing:
                 sites = list(dict.fromkeys(existing["sites"]))
                 site_path = Path(run([interpreter, "-c", "import sysconfig; print(sysconfig.get_path('purelib'))"], quiet=True).strip())
@@ -312,7 +321,7 @@ def install(uv, wheel, *, root=None, bin_dir=None, reuse=True, python=None,
                      "--disable-pip-version-check", "--no-deps", "--force-reinstall", wheel])
             else:
                 run([uv, "pip", "install", "--python", interpreter, "--torch-backend", "cpu", wheel])
-            log("Checking the installed OCR and preparing the extension…")
+            stage(85, "Checking the installed OCR and preparing the extension…")
             # State-isolated tests install the helper but never touch real
             # browser registration folders on the developer's machine.
             result = json.loads(run([interpreter, "-c", SETUP, str(native_host or ""),
@@ -320,6 +329,7 @@ def install(uv, wheel, *, root=None, bin_dir=None, reuse=True, python=None,
         except BaseException:
             shutil.rmtree(venv, ignore_errors=True)
             raise
+        stage(95, "Saving launcher and browser integration…")
         path = bin_dir / ("mokuro-browser.cmd" if os.name == "nt" else "mokuro-browser")
         backup = previous.get("launcher_backup") if previous else (
             base64.b64encode(path.read_bytes()).decode() if path.exists() else None)
@@ -361,7 +371,7 @@ def install(uv, wheel, *, root=None, bin_dir=None, reuse=True, python=None,
             run([env_python(Path(record["startup_environment"])), "-m", "mokuro_browser", "autostart", "remove"])
             record["autostart"] = False
             atomic_write(root / "install.json", json.dumps(record, indent=2))
-        log("Installation complete. Open a new terminal to use mokuro-browser.")
+        stage(100, "Installation complete.")
         return result
 
 def uninstall(*, root=None, log=print):

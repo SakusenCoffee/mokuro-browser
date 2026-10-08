@@ -6,6 +6,7 @@ import platform
 import subprocess
 import sys
 import zipfile
+from installer.core import child_environment
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
@@ -71,7 +72,9 @@ def download(update, destination, opener=urlopen):
     try:
         with opener(request, timeout=30) as response, temporary.open("wb") as stream:
             final = urlparse(response.geturl())
-            if final.scheme != "https" or not final.hostname or not final.hostname.endswith(("github.com", "githubusercontent.com")):
+            if final.scheme != "https" or not final.hostname or not any(
+                    final.hostname == host or final.hostname.endswith("." + host)
+                    for host in ("github.com", "githubusercontent.com")):
                 raise ValueError("The update download redirected away from GitHub.")
             size = 0
             while chunk := response.read(1024 * 1024):
@@ -97,13 +100,18 @@ def launch_update(path):
                 if not (destination / member).resolve().is_relative_to(destination.resolve()):
                     raise ValueError("The update archive has an invalid path.")
             archive.extractall(destination)
+            # zipfile does not restore executable permissions from macOS ZIPs.
+            for member in archive.infolist():
+                path = destination / member.filename
+                if not member.is_dir() and member.external_attr >> 16 & 0o111:
+                    path.chmod(0o755)
         candidates = list(destination.glob("*.app/Contents/MacOS/MokuroBrowserSetup"))
         if len(candidates) != 1:
             raise RuntimeError("The macOS update archive is missing its launcher.")
         executable = candidates[0]
-        subprocess.run([str(executable), "--cli", "--launcher-only-update"], check=True)
-        subprocess.Popen(["open", str(executable.parents[2])])
+        subprocess.run([str(executable), "--cli", "--launcher-only-update"], check=True, env=child_environment())
+        subprocess.Popen(["open", str(executable.parents[2])], env=child_environment())
         return
     command = [str(path), "--cli", "--launcher-only-update"]
-    subprocess.run(command, check=True)
-    subprocess.Popen([str(path)])
+    subprocess.run(command, check=True, env=child_environment())
+    subprocess.Popen([str(path)], env=child_environment())

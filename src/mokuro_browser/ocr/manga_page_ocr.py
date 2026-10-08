@@ -88,7 +88,13 @@ class MangaPageOcr:
         return texts
 
     def __call__(self, img_path):
-        img = imread(img_path)
+        return self.recognize_image(imread(img_path))
+
+    def recognize_bytes(self, data):
+        """Decode uploads directly, avoiding a temporary PNG write/read."""
+        return self.recognize_image(cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR))
+
+    def recognize_image(self, img):
         if img is None:
             raise InvalidImage()
         H, W, *_ = img.shape
@@ -167,7 +173,9 @@ class MangaPageOcr:
 
             line_density = line_mask.sum(axis=0)
             line_density = np.convolve(line_density, k, "same")
-            line_density /= line_density.max()
+            peak = line_density.max()
+            if peak > 0:
+                line_density /= peak
 
             anchor_window *= textheight
 

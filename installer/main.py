@@ -30,7 +30,7 @@ def payload():
 def bundled_version():
     return payload()[1].name.split("-")[1]
 
-def execute(args, log):
+def execute(args, log, progress=None):
     if args.uninstall:
         core.uninstall(root=args.root, log=log)
         return {"removed": True}
@@ -39,7 +39,8 @@ def execute(args, log):
                         reuse=not args.fresh, python=args.python,
                         autostart=args.autostart, modify_path=not args.no_path,
                         state_dir=args.state_dir, native_host=native_host,
-                        export_browser_extension=not getattr(args, "launcher_only_update", False), log=log)
+                        export_browser_extension=not getattr(args, "launcher_only_update", False), log=log,
+                        progress=progress)
 
 def open_folder(folder):
     if os.name == "nt":
@@ -51,13 +52,18 @@ def gui(args):
     import tkinter as tk
     from tkinter import ttk
     from tkinter.scrolledtext import ScrolledText
-    root = tk.Tk()
+    if os.name == "nt":
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("SakusenCoffee.MokuroBrowser")
+    root = tk.Tk(className="MokuroBrowser")
     root.title("Mokuro Browser")
     root.configure(bg="#101919")
     assets = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
     icon = assets / ("payload/icon-128.png" if getattr(sys, "frozen", False) else "extension/icon-128.png")
     root.app_icon = tk.PhotoImage(file=str(icon))
     root.iconphoto(True, root.app_icon)
+    if os.name == "nt" and (assets / "payload/mokuro-browser.ico").is_file():
+        root.iconbitmap(default=str(assets / "payload/mokuro-browser.ico"))
     root.geometry("980x760")
     root.minsize(760, 600)
     style = ttk.Style(root)
@@ -280,7 +286,9 @@ def gui(args):
             except Exception as error:
                 messages.put(("server_error", str(error)))
         threading.Thread(target=work, daemon=True).start()
-    progress = ttk.Progressbar(frame, mode="indeterminate")
+    progress = ttk.Progressbar(frame, mode="determinate", maximum=100)
+    progress_text = tk.StringVar()
+    progress_label = ttk.Label(frame, textvariable=progress_text, style="Subtle.TLabel")
     def write(text):
         output.configure(state="normal")
         output.insert("end", text + "\n")
@@ -334,7 +342,11 @@ def gui(args):
         running = True
         server_generation += 1
         progress.pack(fill="x", before=log_tabs, pady=(0, 8))
-        progress.start()
+        progress_label.pack(fill="x", before=progress, pady=(0, 4))
+        progress.configure(mode="indeterminate" if removing else "determinate", value=0)
+        progress_text.set("Removing managed installation…" if removing else "Preparing installation…")
+        if removing:
+            progress.start()
         install_button.configure(state="disabled")
         remove_button.configure(state="disabled")
         server_button.configure(state="disabled")
@@ -345,7 +357,8 @@ def gui(args):
                 current = launcher.installed(args.root)
                 if current and launcher.control(current, "status")["running"]:
                     launcher.control(current, "stop")
-                messages.put(("done", execute(args, lambda line: messages.put(("log", line)))))
+                messages.put(("done", execute(args, lambda line: messages.put(("log", line)),
+                                              lambda percent, message: messages.put(("progress", (percent, message))))))
             except Exception as error:
                 messages.put(("error", str(error)))
         threading.Thread(target=work, daemon=True).start()
@@ -400,6 +413,11 @@ def gui(args):
             kind, value = messages.get_nowait()
             if kind == "log":
                 write(value)
+                continue
+            if kind == "progress":
+                percent, message = value
+                progress.configure(value=percent)
+                progress_text.set(f"{percent:.0f}% · {message} (installation stages)")
                 continue
             if kind == "update_available":
                 update_info = value
@@ -502,15 +520,17 @@ def gui(args):
                 continue
             running = False
             progress.stop()
-            progress.pack_forget()
             install_button.configure(state="normal")
             remove_button.configure(state="normal")
             for widget in actions.winfo_children():
                 widget.destroy()
             if kind == "error":
+                progress_text.set("Installation failed — see the installation log below.")
                 server_status.set("Installation failed")
                 write("Installation failed:\n" + value + "\nYou can retry without removing your existing installation.")
             elif value.get("removed"):
+                progress.pack_forget()
+                progress_label.pack_forget()
                 installed_record = None
                 owned_server = False
                 code.set("")

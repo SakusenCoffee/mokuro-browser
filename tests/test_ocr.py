@@ -8,6 +8,14 @@ from mokuro_browser.ocr.manga_page_ocr import MangaPageOcr, cached_model_path
 from mokuro_browser.ocr.detector import TextDetBase
 
 class OcrTests(unittest.TestCase):
+    def test_uploaded_bytes_and_file_decode_identically(self):
+        import cv2
+        image = np.random.default_rng(42).integers(0, 256, (31, 27, 3), dtype=np.uint8)
+        data = cv2.imencode('.png', image)[1].tobytes()
+        ocr = MangaPageOcr(disable_ocr=True)
+        with mock.patch.object(ocr, 'recognize_image', side_effect=lambda value: value):
+            np.testing.assert_array_equal(ocr.recognize_bytes(data), image)
+
     def test_detector_and_page_ocr_use_bundled_fork(self):
         self.assertEqual(MangaPageOcr.__module__, "mokuro_browser.ocr.manga_page_ocr")
         self.assertEqual(TextDetBase.__module__, "mokuro_browser.ocr.basemodel")

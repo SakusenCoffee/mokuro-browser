@@ -5,4 +5,5 @@ Comment=Install or update the local manga OCR server and browser companion
 Exec=MokuroBrowserSetup
 Icon=mokuro-browser
 Terminal=false
+StartupWMClass=MokuroBrowser
 Categories=Utility;

@@ -28,8 +28,9 @@ dependencies and model caches. Scanning happens on your computer.
 
 2. Run the `.exe`, or extract the Mac/Linux download and open
    **MokuroBrowserSetup**. On first launch it installs Python and any missing
-   dependencies, prepares the extension, and starts the server. No administrator
-   access is needed.
+   dependencies, prepares the extension, and starts the server. The app installs
+   per user; Windows may request administrator approval to install Microsoft's
+   Visual C++ runtime if it is missing.
 3. Leave the app open while reading. Launch the same executable next time to
    start the server again. The app displays the connect code and has a **Copy**
    button. **Install / update** is available for repairs and updates.
@@ -61,6 +62,14 @@ and sign/notarize Mac builds. Signing needs verified publisher accounts; these
 downloads remain unsigned until those accounts are configured.
 
 ## Install the browser extension
+
+On a fresh Windows installation, setup checks for the Microsoft Visual C++
+runtime required by PyTorch. If it is missing, setup downloads Microsoft's
+signed installer and asks Windows to install it. Approve the administrator
+prompt; if Windows requests a restart, restart and run Mokuro Browser again.
+The progress bar shows completed installation stages (not remaining time).
+Dependency installation can stay at one stage for several minutes; the
+installation log below it shows download and installation activity.
 
 1. Install the extension:
    - **Chrome/Chromium:** open `chrome://extensions`, enable **Developer mode**,

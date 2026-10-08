@@ -7,6 +7,9 @@ const pairing = document.querySelector("#pairing");
 const pairingCode = document.querySelector("#pairing-code");
 let controlAvailable = false;
 let healthPending = false;
+let pairingPromptShown = false;
+let pairingTouched = false;
+pairing.querySelector("summary").addEventListener("click", () => { pairingTouched = true; });
 function showAuto(enabled) {
   auto.setAttribute("aria-pressed", String(enabled));
   auto.textContent = `Auto-scan manga: ${enabled ? "On" : "Off"}`;
@@ -48,7 +51,8 @@ function showHealth(reply) {
     meter.parentElement.hidden = !reply.ok || !Number.isFinite(value);
     meter.textContent = Number.isFinite(value) ? `${Math.round(value)}%` : "";
   }
-  if (!reply.ok) pairing.open = true;
+  if (!reply.ok && !pairingPromptShown && !pairingTouched) pairing.open = true;
+  if (!reply.ok) pairingPromptShown = true;
 }
 function showServer(data) {
   const running = data.running === true;

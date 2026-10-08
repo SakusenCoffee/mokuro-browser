@@ -75,6 +75,7 @@ def main():
         with Image.open(ROOT / "extension/icon-128.png") as artwork:
             artwork.resize((256, 256)).save(icon)
         options.extend(["--icon", str(icon)])
+        options.extend(["--add-data", f"{icon}{os.pathsep}payload"])
     if sys.platform in ("win32", "darwin") and not args.console:
         options.append("--windowed")
     if args.codesign_identity:

@@ -6,16 +6,19 @@ const source = await readFile(new URL('../extension/popup.js', import.meta.url),
 
 async function popupWithHealth(health) {
   const elements = new Map();
+  let tick;
   const element = selector => {
     if (!elements.has(selector)) elements.set(selector, {
       textContent: '', disabled: false, open: false, value: '', parentElement: {hidden: false},
       attributes: {}, setAttribute(name, value) { this.attributes[name] = value; },
+      querySelector: element,
+      addEventListener(name, callback) { this[name] = callback; },
       getAttribute(name) { return this.attributes[name] ?? 'false'; }
     });
     return elements.get(selector);
   };
   const context = vm.createContext({
-    setInterval() {},
+    setInterval(callback) { tick = callback; },
     document: {querySelector: element, getElementById: element},
     chrome: {
       storage: {onChanged: {addListener() {}}, local: {get: async () => ({autoScan: false, pairingToken: 'saved-code'})}},
@@ -29,6 +32,7 @@ async function popupWithHealth(health) {
   });
   vm.runInContext(source, context);
   await new Promise(resolve => setImmediate(resolve));
+  element.tick = () => tick();
   return element;
 }
 
@@ -53,5 +57,10 @@ assert.equal(loading('#gpu-load').parentElement.hidden, false);
 const unpaired = await popupWithHealth({ok: false, error: 'Automatic pairing is unavailable.'});
 assert.match(unpaired('#status').textContent, /Paste the connect code/);
 assert.equal(unpaired('#pairing').open, true);
+unpaired('summary').click();
+unpaired('#pairing').open = false;
+await unpaired.tick();
+await unpaired.tick();
+assert.equal(unpaired('#pairing').open, false, 'health polling must respect a collapsed pairing section');
 
 console.log('PASS: popup checks server health without native control and highlights manual pairing');

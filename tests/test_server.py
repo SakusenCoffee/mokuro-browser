@@ -91,6 +91,22 @@ class ServerTests(unittest.TestCase):
             time.sleep(.01)
         self.assertEqual(engine.status()["model"], "ready")
 
+    def test_duplicate_inflight_pages_share_work_but_rescan_does_not(self):
+        entered, release = threading.Event(), threading.Event()
+        def scan(path):
+            entered.set()
+            release.wait(3)
+            return {"blocks": []}
+        engine = server.OcrEngine(lambda: scan)
+        try:
+            first = engine.submit(self.image())
+            self.assertTrue(entered.wait(1))
+            self.assertEqual(engine.submit(self.image())["id"], first["id"])
+            self.assertNotEqual(engine.submit(self.image(), force=True)["id"], first["id"])
+        finally:
+            release.set()
+            engine.pending.join()
+
     def test_saved_gpu_setting_is_used_when_server_launches(self):
         with tempfile.TemporaryDirectory() as directory:
             folder = Path(directory)
