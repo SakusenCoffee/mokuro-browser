@@ -590,6 +590,11 @@ def gui(args):
                 progress_text.set("Installation failed — see the installation log below.")
                 server_status.set("Installation failed")
                 write("Installation failed:\n" + value + "\nYou can retry without removing your existing installation.")
+                if args.gui_cycle_test:
+                    if args.report:
+                        core.atomic_write(args.report, json.dumps({"gui_cycle": False, "error": value}))
+                    root.destroy()
+                    return
             elif value.get("removed"):
                 progress.pack_forget()
                 progress_label.pack_forget()

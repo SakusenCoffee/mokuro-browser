@@ -10,7 +10,17 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "GPL-3.0-only"
 license-files = ["LICENSE", "THIRD_PARTY.md"]
-dependencies = ["mokuro>=0.2.2,<=0.2.5", "platformdirs>=4", "Pillow>=9", "huggingface-hub>=0.26", "setuptools<81", "psutil>=5.9.6", "rapidocr==3.10.0", "onnxruntime>=1.24.2,<2"]
+dependencies = [
+    "mokuro>=0.2.2,<=0.2.5", "platformdirs>=4", "Pillow>=9",
+    "huggingface-hub>=0.26", "setuptools<81", "psutil>=5.9.6",
+    "rapidocr==3.10.0",
+    "onnxruntime>=1.24.2,<2; platform_system != 'Darwin' or platform_machine != 'x86_64'",
+    # New ONNX Runtime wheels no longer support Intel macOS. This release
+    # supports both PP-OCRv6 models and has a Python 3.12 universal2 wheel.
+    "onnxruntime==1.19.2; platform_system == 'Darwin' and platform_machine == 'x86_64'",
+    # Intel macOS uses PyTorch 2.2, whose NumPy bridge requires NumPy 1.x.
+    "numpy<2; platform_system == 'Darwin' and platform_machine == 'x86_64'",
+]
 
 [project.scripts]
 mokuro-browser = "mokuro_browser.cli:main"
