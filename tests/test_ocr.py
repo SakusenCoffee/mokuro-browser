@@ -30,7 +30,7 @@ class OcrTests(unittest.TestCase):
         with mock.patch.object(ocr, "recognize_crops", return_value=[]), \
                 mock.patch("torch.set_flush_denormal") as flush:
             ocr.device = "cpu"
-            self.assertEqual(ocr.recognize_image(image)["ocr_revision"], 2)
+            self.assertEqual(ocr.recognize_image(image)["ocr_revision"], 3)
             flush.assert_called_once_with(True)
             flush.reset_mock()
             ocr.device = "cuda"

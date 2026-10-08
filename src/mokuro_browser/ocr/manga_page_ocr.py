@@ -10,7 +10,7 @@ from mokuro import __version__
 from mokuro.cache import cache
 from mokuro.utils import imread
 from .paragraphs import recover_paragraphs
-from .covers import CoverOcr, merge_cover_text
+from .covers import CoverOcr, merge_cover_text, refine_kana
 from manga_ocr.ocr import post_process
 import torch
 from pathlib import Path
@@ -161,7 +161,8 @@ class MangaPageOcr:
             block["lines"][line_index] += text
 
         result["blocks"] = merge_cover_text(img, result["blocks"], self.cover_ocr.recognize(img))
-        result["ocr_revision"] = 2
+        refine_kana(img, result["blocks"], self.recognize_crops)
+        result["ocr_revision"] = 3
         return result
 
     @staticmethod

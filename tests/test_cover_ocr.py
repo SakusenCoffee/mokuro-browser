@@ -3,7 +3,7 @@ from unittest import mock
 
 import numpy as np
 
-from mokuro_browser.ocr.covers import CoverOcr, covered_area, merge_cover_text
+from mokuro_browser.ocr.covers import CoverOcr, covered_area, merge_cover_text, refine_kana
 
 
 def block(box, text, *, score=None, font=20, vertical=False):
@@ -48,6 +48,44 @@ class CoverOcrTests(unittest.TestCase):
                  block([20, 125, 40, 150], "読", vertical=True)]
         scene = [block([15, 20, 45, 200], "特別読切", score=.95, vertical=True)]
         self.assertEqual(merge_cover_text(self.white, manga, scene), scene)
+
+    def test_overlapping_primary_rows_do_not_hide_stacked_cover_lettering(self):
+        manga = [block([20, 20, 100, 40], "誤読"),
+                 block([10, 10, 450, 110], "結合された見出し", font=80)]
+        scene = [block([15, 15, 105, 45], "サンデー", score=.99),
+                 block([15, 50, 105, 80], "うえぶり", score=.98),
+                 block([110, 15, 460, 105], "新連載！記念第1話", score=.96, font=60)]
+        result = merge_cover_text(self.white, manga, scene)
+        self.assertEqual({b["lines"][0] for b in result},
+                         {"サンデー", "うえぶり", "新連載！記念第1話"})
+
+    def test_crowded_rows_still_require_complete_replacement_coverage(self):
+        manga = [block([20, 20, 100, 40], "小さい行"),
+                 block([10, 10, 450, 110], "大きい行", font=80)]
+        scene = [block([15, 15, 105, 45], "部分", score=.99)]
+        self.assertEqual(merge_cover_text(self.white, manga, scene), manga)
+
+    def test_kana_retry_only_accepts_same_word_with_different_kana_size(self):
+        scenes = [block([20, 20, 100, 40], "うえぶり", score=.98),
+                  block([20, 50, 100, 70], "アイス", score=.99)]
+        recognize = mock.Mock(return_value=["うぇぶり", "アイズ"])
+        refine_kana(self.white, scenes, recognize)
+        self.assertEqual([b["lines"][0] for b in scenes], ["うぇぶり", "アイス"])
+        self.assertEqual(len(recognize.call_args.args[0]), 2)
+
+    def test_kana_retry_skips_primary_text_and_limits_work(self):
+        primary = block([20, 20, 100, 40], "うえぶり")
+        scenes = [primary] + [block([20, 20, 100, 40], "うえぶり", score=.98)
+                              for _ in range(10)]
+        recognize = mock.Mock(return_value=["うぇぶり"] * 4)
+        refine_kana(self.white, scenes, recognize)
+        self.assertEqual(primary["lines"], ["うえぶり"])
+        self.assertEqual(len(recognize.call_args.args[0]), 4)
+
+    def test_ordinary_dialogue_needs_no_extra_recognition(self):
+        recognize = mock.Mock()
+        refine_kana(self.white, [block([20, 20, 100, 40], "ありがとう")], recognize)
+        recognize.assert_not_called()
 
     def test_partial_character_does_not_erase_complete_credit(self):
         manga = [block([20, 20, 45, 150], "原作", vertical=True)]

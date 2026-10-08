@@ -57,6 +57,40 @@ def colored(image, box):
     return np.mean((hsv[:, :, 1] > 40) & (hsv[:, :, 2] > 50)) > .08
 
 
+def refine_kana(image, blocks, recognize_crops):
+    """Resolve small-kana ambiguity without changing the recognized word.
+
+    Scene OCR often expands small kana in logos. Only accept a Japanese-model
+    retry when the two readings differ solely in kana size, not their content.
+    Bound the retries so decorative pages cannot trigger unlimited inference.
+    """
+    small = "ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ"
+    large = "あいうえおつやゆよわアイウエオツヤユヨワカケ"
+    fold = str.maketrans(small, large)
+    candidates, crops = [], []
+    for block in blocks:
+        if block.get("ocr_source") != "ppocrv6" or not block["lines"]:
+            continue
+        text = block["lines"][0]
+        if (block["vertical"]
+                or block.get("confidence", 0) < .9 or not 2 <= len(text) <= 16
+                or not all("ぁ" <= char <= "ヺ" or char == "ー" for char in text)
+                or not any(char in large for char in text)):
+            continue
+        region, _ = crop(image, block["box"])
+        if region.size:
+            candidates.append(block)
+            crops.append(cv2.cvtColor(region, cv2.COLOR_BGR2RGB))
+        if len(candidates) == 4:
+            break
+    if not crops:
+        return
+    for block, retry in zip(candidates, recognize_crops(crops)):
+        original = block["lines"][0]
+        if retry.translate(fold) == original.translate(fold):
+            block["lines"] = [retry]
+
+
 class CoverOcr:
     def __init__(self):
         import rapidocr
@@ -147,6 +181,18 @@ def merge_cover_text(image, manga_blocks, scene_blocks):
     typical_font = float(np.median(fonts)) if fonts else 0
     primary = [(block, index, bounds(coords)) for block in manga_blocks
                for index, coords in enumerate(block["lines_coords"])]
+    # A bad paragraph recovery can put a short row inside another, much taller
+    # row. Treat both as layout failures, including black text on white covers;
+    # color/font heuristics alone incorrectly preserve the merged reading.
+    crowded = set()
+    for i, (block, index, box) in enumerate(primary):
+        for other, other_index, other_box in primary[i + 1:]:
+            if block["vertical"] or other["vertical"]:
+                continue
+            smaller = min(area(box), area(other_box))
+            if (smaller > 0 and max(area(box), area(other_box)) >= smaller * 1.8
+                    and intersection(box, other_box) >= smaller * .5):
+                crowded.update(((id(block), index), (id(other), other_index)))
     proposals = []
     for scene in scene_blocks:
         box = scene["box"]
@@ -157,6 +203,9 @@ def merge_cover_text(image, manga_blocks, scene_blocks):
                      or (typical_font > 0 and scene["font_size"] > typical_font * 1.5))
         overlapping = [(block, index, line_box) for block, index, line_box in primary
                        if intersection(box, line_box) / max(1, min(area(box), area(line_box))) > .25]
+        if scene["confidence"] >= .9 and any((id(block), index) in crowded
+                                             for block, index, _ in overlapping):
+            difficult = True
         if overlapping and not difficult:
             continue
         if not overlapping and scene["confidence"] < .9:

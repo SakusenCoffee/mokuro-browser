@@ -1,6 +1,5 @@
-- Added PP-OCRv6 for cover and magazine text.
-- Fixed CPU inference slowdown and Intel Mac compatibility.
-- Replaced bottom-right controls with a smaller, fading blue orb.
-- Added a dark, translucent all-text panel.
+- Fixed overlapping OCR regions discarding cover lettering.
+- Improved small-kana recognition in cover text.
+- Cleared outdated scan caches in extension 1.6.1.
 
-Update the launcher and extension 1.6.0. Reload the extension, refresh manga tabs, and rescan.
+Update the launcher and extension, restart the server, and rescan.
