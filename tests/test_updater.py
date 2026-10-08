@@ -31,9 +31,10 @@ class UpdaterTests(unittest.TestCase):
     @mock.patch.object(updater.os, "access", return_value=True)
     def test_writable_appimage_is_replaced_regardless_of_suffix_case(self, access):
         update = {"name": "MokuroBrowserSetup-linux-x64.AppImage"}
-        self.assertEqual(updater.destination(update, environment={"APPIMAGE": "/apps/Mokuro.appimage"},
-                                             system="linux"), Path("/apps/Mokuro.appimage"))
-        access.assert_called_once_with(Path("/apps"), updater.os.W_OK)
+        current = Path("Mokuro.appimage").absolute()
+        self.assertEqual(updater.destination(update, environment={"APPIMAGE": str(current)},
+                                             system="linux"), current)
+        access.assert_called_once_with(current.parent, updater.os.W_OK)
 
     @mock.patch.object(updater.os, "access", return_value=False)
     def test_read_only_appimage_uses_private_update_folder(self, access):
