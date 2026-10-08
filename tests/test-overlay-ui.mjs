@@ -81,26 +81,37 @@ try {
     b.setStart(span.firstChild,1);b.setEnd(span.firstChild,2);
     const x=a.getBoundingClientRect(),y=b.getBoundingClientRect();
     return {text:line.textContent,topDifference:Math.abs(x.top-y.top),leftDifference:Math.abs(x.left-y.left),
-      surface:getComputedStyle(document.querySelector('.text-surface')).opacity,
-      mask:getComputedStyle(document.querySelector('.text-surface'),'::before').right};
+      glyph:getComputedStyle(line).opacity,
+      maskWidth:parseFloat(document.querySelector('.ink-mask').style.width)};
   })()`);
   assert.equal(metrics.text, '１４年…');
   assert(metrics.topDifference < 2 && metrics.leftDifference > 0, JSON.stringify(metrics));
-  assert.equal(metrics.surface, '1');
-  assert(parseFloat(metrics.mask) < -5);
-  assert.equal(await evaluate(`document.elementFromPoint(220,180).id`), 'manga', 'gaps must pass page-turn clicks through');
+  assert.equal(metrics.glyph, '1');
+  assert(metrics.maskWidth > 30 && metrics.maskWidth < 60);
+  assert.equal(await evaluate(`document.querySelectorAll('.backdrop').length`), 0);
+  assert(await evaluate(`(()=>{
+    const surface=document.querySelector('.text-surface').getBoundingClientRect();
+    const lines=[...document.querySelectorAll('.line')].map(line=>line.getBoundingClientRect());
+    for(let y=surface.top+1;y<surface.bottom;y+=2)for(let x=surface.left+1;x<surface.right;x+=2){
+      if(!lines.some(line=>x>=line.left&&x<=line.right&&y>=line.top&&y<=line.bottom)
+        &&document.elementFromPoint(x,y)?.id==='manga')return true;
+    }
+    return false;
+  })()`),'background gaps must pass page-turn clicks through');
   if (process.env.MOKURO_OVERLAY_SCREENSHOT) {
     const shot = await page('Page.captureScreenshot', {format:'png'});
     await writeFile(process.env.MOKURO_OVERLAY_SCREENSHOT, Buffer.from(shot.data,'base64'));
   }
   const measure = () => evaluate(`document.querySelector('.line').getBoundingClientRect().width`);
   const width = await measure();
+  const maskWidth = await evaluate(`document.querySelector('.ink-mask').getBoundingClientRect().width`);
   await evaluate(`storageChanged({hoverFontPercent:{newValue:150}},'local')`);
   assert(Math.abs(await measure() / width - 1.5) < .01);
+  assert.equal(await evaluate(`document.querySelector('.ink-mask').getBoundingClientRect().width`), maskWidth);
   await evaluate(`storageChanged({hoverFontPercent:{newValue:50}},'local')`);
   await sleep(50);
   assert(Math.abs(await measure() / width - .5) < .01);
-  assert.equal(await evaluate(`getComputedStyle(document.querySelector('.backdrop')).opacity`), '1');
+  assert.equal(await evaluate(`getComputedStyle(document.querySelector('.ink-mask')).opacity`), '1');
   await page('Input.dispatchMouseEvent', {type:'mouseMoved', x:650, y:550});
   await sleep(250);
   assert.equal(await evaluate(`getComputedStyle(document.querySelector('.toolbar-actions')).visibility`), 'visible');
@@ -112,7 +123,60 @@ try {
     const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range)})()`);
   await sleep(250);
   assert.equal(await orbOpacity(), '0.35', 'selecting OCR text reveals the orb');
-  console.log('PASS: vertical paired digits, hover masks, live size changes, stable hover targets and contextual orb');
+  // Mixed font sizes, a very narrow ellipsis, a wide region box and horizontal
+  // lines: every glyph gets the page median while masks remain source-sized.
+  const mixed = {img_width:235, img_height:284, blocks:[
+    {box:[0,0,235,260],font_size:30,vertical:true,lines:['それじゃあ','……','瓜二つの','人間か…'],
+      lines_coords:[[[180,20],[210,20],[210,170],[180,170]],[[160,20],[165,20],[165,100],[160,100]],
+        [[125,20],[145,20],[145,120],[125,120]],[[95,20],[115,20],[115,120],[95,120]]]},
+    {box:[10,185,90,275],font_size:15,vertical:true,lines:['小さい文字'],
+      lines_coords:[[[55,190],[70,190],[70,273],[55,273]]]},
+    {box:[100,190,230,270],font_size:40,vertical:false,lines:['大きい文字','次の行'],
+      lines_coords:[[[105,190],[228,190],[228,230],[105,230]],[[105,235],[228,235],[228,265],[105,265]]]},
+    {box:[0,0,10,100],font_size:3,vertical:true,lines:['……'],
+      lines_coords:[[[1,1],[4,1],[4,99],[1,99]]]}]};
+  await evaluate(`storageChanged({hoverFontPercent:{newValue:100}},'local')`);
+  const mixedReply = await evaluate(`deliver(${JSON.stringify({type:'RENDER',target:reply,result:mixed})})`);
+  assert(!mixedReply.error, JSON.stringify(mixedReply));
+  assert.deepEqual(await evaluate(`[...new Set([...document.querySelectorAll('.line')].map(line=>line.style.fontSize))]`), ['30px']);
+  assert.equal(await evaluate(`MokuroResults.pageFont(${JSON.stringify(mixed)})`),30);
+  const evenlySpaced = await evaluate(`(()=>{
+    return [...document.querySelectorAll('.text-surface')].every(surface=>{
+      const lines=[...surface.querySelectorAll('.line')],rect=surface.getBoundingClientRect();
+      const vertical=surface.classList.contains('vertical');
+      const bounds=lines.map(line=>line.getBoundingClientRect()).sort((a,b)=>vertical?a.left-b.left:a.top-b.top);
+      const expectedGap=parseFloat(getComputedStyle(surface).gap)*2;
+      const spaced=bounds.slice(1).every((current,index)=>Math.abs((vertical?
+        current.left-bounds[index].right:current.top-bounds[index].bottom)-expectedGap)<1);
+      const fitted=bounds.every(line=>line.left>=rect.left&&line.top>=rect.top&&line.right<=rect.right+.1&&line.bottom<=rect.bottom+.1);
+      return spaced&&fitted;
+    });
+  })()`);
+  assert(evenlySpaced,'rows/columns need equal gaps and backgrounds must fit all glyphs');
+  const mixedMasks = await evaluate(`[...document.querySelectorAll('.ink-mask')].map(mask=>[mask.style.width,mask.style.height])`);
+  await evaluate(`storageChanged({hoverFontPercent:{newValue:150}},'local')`);
+  assert.deepEqual(await evaluate(`[...new Set([...document.querySelectorAll('.line')].map(line=>line.style.fontSize))]`), ['45px']);
+  assert.deepEqual(await evaluate(`[...document.querySelectorAll('.ink-mask')].map(mask=>[mask.style.width,mask.style.height])`),mixedMasks);
+  assert.equal(await evaluate(`(()=>{
+    const blocks=[...document.querySelectorAll('.block')];
+    return blocks.every(block=>getComputedStyle(block).backgroundColor==='rgba(0, 0, 0, 0)');
+  })()`),true,'entire region boxes must never become white backdrops');
+  if (process.env.MOKURO_BUBBLE_IMAGE) {
+    const bubble = `data:image/png;base64,${(await readFile(process.env.MOKURO_BUBBLE_IMAGE)).toString('base64')}`;
+    await evaluate(`new Promise(resolve=>{const img=document.querySelector('#manga');img.style.width='386px';img.style.height='415px';img.onload=resolve;img.src=${JSON.stringify(bubble)}})`);
+    const target = await evaluate(`deliver({type:'LARGEST'})`);
+    const bubbleResult={img_width:386,img_height:415,blocks:[{box:[78,42,285,398],font_size:34,vertical:true,
+      lines:['それじゃあ','……','瓜二つの','人間か…'],lines_coords:[
+        [[247,48],[280,48],[280,235],[247,235]],[[207,48],[222,48],[222,132],[207,132]],
+        [[143,48],[176,48],[176,192],[143,192]],[[84,48],[117,48],[117,194],[84,194]]]}]};
+    await evaluate(`storageChanged({hoverFontPercent:{newValue:100}},'local')`);
+    const rendered=await evaluate(`deliver(${JSON.stringify({type:'RENDER',target,result:bubbleResult})})`);
+    assert(!rendered.error,JSON.stringify(rendered));
+    await evaluate(`document.querySelector('.toolbar-actions button').click()`);
+    const shot=await page('Page.captureScreenshot',{format:'png'});
+    await writeFile('/tmp/mokuro-normalized-bubble.png',Buffer.from(shot.data,'base64'));
+  }
+  console.log('PASS: page-wide normalization, equal gaps, fitted backgrounds, paired digits and contextual orb');
 } finally {
   socket?.close();
   browser.kill();

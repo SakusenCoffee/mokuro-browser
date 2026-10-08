@@ -105,14 +105,10 @@ try {
   for (const ending of ["活な少女。", "の存在。", "有する。"]) assert(text.includes(ending), `Recovered ending: ${ending}`);
   const initial = await inspect("function(){return {left:parseFloat(this.querySelector('.layer').style.left),width:parseFloat(this.querySelector('.layer').style.width)}}");
   assert.equal(initial.width, 720);
-  const fitted = await inspect(`function(){return [...this.querySelectorAll('.block')].every(block=>{
-    const lines=[...block.querySelectorAll('.line')];
-    return new Set(lines.map(line=>line.style.fontSize)).size<=1 && lines.every(line=>{
-      const cross=parseFloat(line.style.writingMode==='vertical-rl'?line.style.width:line.style.height);
-      return parseFloat(line.style.fontSize)*1.1<=cross+.1;
-    });
-  })}`);
-  assert(fitted, 'Text in each block uses a shared font size that fits the detected columns');
+  const normalized = await inspect(`function(){
+    return new Set([...this.querySelectorAll('.line')].map(line=>line.style.fontSize)).size===1;
+  }`);
+  assert(normalized, 'All text regions use the same page-wide base font before resizing');
   await page.evaluate("document.querySelector('#manga').style.width='560px'");
   await waitFor(async () => (await inspect("function(){return parseFloat(this.querySelector('.layer').style.width)}")) === 560, "responsive overlay");
   await inspect("function(){this.querySelector('.toolbar-actions button').click();return true}");

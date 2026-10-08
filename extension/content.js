@@ -34,17 +34,17 @@
     .inner{position:absolute;transform-origin:0 0;pointer-events:none}.block{position:absolute;pointer-events:none}
     .block:hover{z-index:1000}
     .hit-area{position:absolute;pointer-events:auto}
-    .text-surface{position:absolute;inset:0;pointer-events:none;opacity:0;background:white;
-      transform:scale(var(--mokuro-font-scale,1));transform-origin:top left}
-    .text-surface.vertical{transform-origin:top right}
-    .text-surface::before{content:"";position:absolute;inset:-2px;pointer-events:none;background:white}
-    .text-surface.vertical::before{right:calc(-.8 * var(--mokuro-base-font))}
-    .text-surface.horizontal::before{top:calc(-.8 * var(--mokuro-base-font))}
+    .ink-mask{position:absolute;pointer-events:none;opacity:0;background:white}
+    .block:hover .ink-mask,.layer.pinned .ink-mask{opacity:1}
+    .text-surface{position:absolute;display:flex;align-items:flex-start;width:max-content;height:max-content;
+      gap:.2em;padding:.1em;background:white;opacity:0;pointer-events:none}
+    .text-surface.vertical{flex-direction:row-reverse}.text-surface.horizontal{flex-direction:column}
     .block:hover .text-surface,.layer.pinned .text-surface{opacity:1}
-    .line{position:absolute;white-space:nowrap;color:#111;background:white;
-      margin:0;font-family:"Noto Sans JP","Meiryo",sans-serif;line-height:1.1;letter-spacing:.03em;user-select:text;cursor:text;
-      display:block;pointer-events:none;border:0;outline:none;text-orientation:upright}
-    .block:hover .line,.layer.pinned .line{pointer-events:auto}
+    .line{position:relative;white-space:nowrap;color:#111;
+      margin:0;font-family:"Noto Sans JP","Meiryo",sans-serif;line-height:1.1;letter-spacing:0;user-select:text;cursor:text;
+      display:block;pointer-events:none;opacity:0;border:0;outline:none;text-orientation:upright;
+      width:max-content;height:max-content}
+    .block:hover .line,.layer.pinned .line{pointer-events:auto;opacity:1}
     .digits{text-combine-upright:all;writing-mode:inherit;text-orientation:inherit;
       font:inherit;color:inherit;letter-spacing:0;user-select:text;pointer-events:inherit;white-space:inherit}
     .notice,.panel{position:fixed;pointer-events:auto;font:13px/1.5 system-ui,sans-serif;color:#203b35;
@@ -70,7 +70,7 @@
   root.append(style);
   function setFontPercent(value) {
     hoverFontPercent = Number.isFinite(Number(value)) ? Math.min(200, Math.max(50, Number(value))) : 100;
-    host.style.setProperty("--mokuro-font-scale", hoverFontPercent / 100);
+    for (const item of layers) item.sizeText();
   }
   const notice = document.createElement("div");
   notice.className = "notice";
@@ -166,6 +166,19 @@
     return parseFloat(value) || 0;
   }
 
+  function sizeBlock(group, font) {
+    const {surface, entries, vertical, bounds} = group;
+    surface.style.fontSize = `${font}px`;
+    for (const entry of entries) entry.node.style.fontSize = `${font}px`;
+    // OCR coordinates anchor the group. Flex layout provides consistent gaps,
+    // common alignment and a white box sized to the actual replacement text.
+    const pad = font * .1;
+    const left = vertical ? Math.max(...entries.map(entry => entry.left + entry.width)) - surface.offsetWidth + pad
+      : Math.min(...entries.map(entry => entry.left)) - pad;
+    const top = Math.min(...entries.map(entry => entry.top)) - pad;
+    Object.assign(surface.style, {left: `${Math.max(-bounds.x, left)}px`, top: `${Math.max(-bounds.y, top)}px`});
+  }
+
   function render(target, result) {
     if (!MokuroResults.valid(result)) throw new Error("Incomplete OCR data. Check the page to scan it again.");
     if (target.pageKey !== pageKey) throw new Error("The page changed during scanning. Scan again.");
@@ -182,6 +195,8 @@
     inner.style.width = `${result.img_width}px`; inner.style.height = `${result.img_height}px`;
     layer.append(inner); root.append(layer);
     fullText = result.blocks.map(block => block.lines.join("\n")).join("\n\n");
+    const baseFont = MokuroResults.pageFont(result);
+    const textGroups = [];
     for (const block of result.blocks) {
       const [x1, y1, x2, y2] = block.box;
       const box = document.createElement("div"); box.className = "block";
@@ -195,22 +210,12 @@
         const top = Math.min(...poly.map(point => point[1]));
         const width = Math.max(...poly.map(point => point[0])) - left;
         const height = Math.max(...poly.map(point => point[1])) - top;
-        const units = block.vertical ? MokuroResults.verticalParts(text).length
-          : [...text].reduce((sum, char) => sum + (/[^\u0000-\u00ff]/.test(char) ? 1 : .5), 0);
-        // A short column must still fit its detected width. Using only its
-        // length makes two-character columns grow across neighbouring text.
-        const across = block.vertical ? width : height;
-        const along = block.vertical ? height : width;
-        const font = Math.max(1, Math.min(block.font_size, across / 1.1, along / (units * 1.03 || 1)));
-        lines.push({text, left, top, width, height, font});
+        if (width > 0 && height > 0) lines.push({text, left, top, width, height});
       }
-      // Lines in one detected text block share a type size. Otherwise a short
-      // phrase grows much larger than its longer neighbours on hover.
-      const font = Math.min(...lines.map(line => line.font));
       if (!lines.length) continue;
       const surface = document.createElement("div");
       surface.className = `text-surface ${block.vertical ? "vertical" : "horizontal"}`;
-      surface.style.setProperty("--mokuro-base-font", `${font}px`);
+      const masks = [], glyphs = [], entries = [];
       for (const {text, left, top, width, height} of lines) {
         // Keep the original hit regions at every zoom level so reducing the
         // text size cannot make the hover target jump away from the pointer.
@@ -218,6 +223,15 @@
         hit.setAttribute("aria-hidden", "true");
         Object.assign(hit.style, {left: `${left-x1}px`, top: `${top-y1}px`, width: `${width}px`, height: `${height}px`});
         box.append(hit);
+        const mask = document.createElement("div"); mask.className = "ink-mask";
+        mask.setAttribute("aria-hidden", "true");
+        const sourceFont = Math.min(block.font_size, block.vertical ? width : height);
+        const rubyPad = Math.min(sourceFont * .8, block.vertical ? result.img_width - left - width : top);
+        const pad = Math.min(2, sourceFont * .08);
+        Object.assign(mask.style, {left: `${left-x1-pad}px`, top: `${top-y1-pad-(block.vertical ? 0 : rubyPad)}px`,
+          width: `${width+pad*2+(block.vertical ? rubyPad : 0)}px`,
+          height: `${height+pad*2+(block.vertical ? 0 : rubyPad)}px`});
+        masks.push(mask);
         const line = document.createElement("p"); line.className = "line";
         if (block.vertical) {
           for (const part of MokuroResults.verticalParts(text)) {
@@ -227,17 +241,23 @@
             } else line.append(document.createTextNode(part));
           }
         } else line.textContent = text;
-        Object.assign(line.style, {left: `${left-x1}px`, top: `${top-y1}px`, width: `${width}px`,
-          height: `${height}px`, fontSize: `${font}px`, writingMode: block.vertical ? "vertical-rl" : "horizontal-tb"});
-        surface.append(line);
+        Object.assign(line.style, {fontSize: `${baseFont}px`, writingMode: block.vertical ? "vertical-rl" : "horizontal-tb"});
+        glyphs.push(line);
+        entries.push({node: line, left: left-x1, top: top-y1, width, height});
       }
-      // The unscaled backdrop hides original ink even when text is reduced.
-      const backdrop = surface.cloneNode(false);
-      backdrop.classList.add("backdrop");
-      backdrop.style.transform = "none";
-      box.append(backdrop, surface);
+      // Preserve DOM/copy order while laying out vertical columns right-to-left.
+      [...entries].sort((a, b) => block.vertical ? (b.left+b.width)-(a.left+a.width) : a.top-b.top)
+        .forEach((entry, order) => { entry.node.style.order = String(order); });
+      surface.append(...glyphs);
+      box.append(...masks, surface);
       inner.append(box);
+      textGroups.push({surface, entries, vertical: block.vertical, bounds: {x:x1, y:y1}});
     }
+    const sizeText = () => {
+      const font = baseFont * hoverFontPercent / 100;
+      for (const group of textGroups) sizeBlock(group, font);
+    };
+    sizeText();
     let frame = 0;
     const layout = () => {
       frame = 0;
@@ -275,7 +295,7 @@
     window.addEventListener("resize", schedule);
     // Position can shift without resizing the image (lazy ads, reader controls).
     const interval = setInterval(schedule, 700);
-    layers.add({node: layer, target, result, layout, cleanup() {
+    layers.add({node: layer, target, result, layout, sizeText, cleanup() {
       resize.disconnect(); clearInterval(interval); cancelAnimationFrame(frame);
       window.removeEventListener("scroll", schedule, true); window.removeEventListener("resize", schedule);
     }});

@@ -6,6 +6,15 @@ globalThis.MokuroResults = {
     // Preserve original characters for copying and dictionary lookup.
     return text.match(/(?<![0-9０-９])[0-9０-９]{2}(?![0-9０-９])|[\s\S]/gu) || [];
   },
+  pageFont(result) {
+    // Punctuation-only detections must not set the size of dialogue.
+    // The median is stable when a page mixes small captions and large shouts.
+    const body = result.blocks.filter(block => block.lines.some(text => /[\p{L}\p{N}]/u.test(text)));
+    const sizes = (body.length ? body : result.blocks).map(block => block.font_size).sort((a, b) => a - b);
+    if (!sizes.length) return 16;
+    const middle = Math.floor(sizes.length / 2);
+    return Math.max(1, sizes.length % 2 ? sizes[middle] : (sizes[middle - 1] + sizes[middle]) / 2);
+  },
   valid(result) {
     const point = value => Array.isArray(value) && value.length === 2 && value.every(Number.isFinite);
     return !!result && Number.isFinite(result.img_width) && result.img_width > 0

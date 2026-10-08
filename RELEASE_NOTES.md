@@ -1,9 +1,14 @@
 # v0.1.9 — Windows setup and browser fixes
 
-## Browser extension update: 1.5.3
+## Browser extension update: 1.5.4
 
-Use `mokuro-browser-extension-1.5.3.zip` for the latest browser fixes; it works
-with the v0.1.9 launchers below. It supersedes the 1.5.2 extension ZIP.
+Use `mokuro-browser-extension-1.5.4.zip` for the latest browser fixes; it works
+with the v0.1.9 launchers below. It supersedes the 1.5.2 and 1.5.3 extension ZIPs.
+
+- Normalizes all text areas to a shared page-wide font before the size slider
+  takes effect. A narrow punctuation column no longer shrinks the whole bubble.
+- Typesets vertical columns and horizontal rows with equal gaps and common
+  alignment. White backgrounds fit the replacement text at the selected size.
 
 - Keeps two-digit numbers together in vertical Japanese text and covers
   adjacent original furigana when showing the replacement text.
@@ -35,7 +40,7 @@ changes apply to cached OCR results too; rescanning is not required.
 
 Download the installer matching your OS. Windows may request administrator
 approval for the Microsoft runtime; the rest of the app installs per user.
-Download and extract `mokuro-browser-extension-1.5.3.zip`, then open
+Download and extract `mokuro-browser-extension-1.5.4.zip`, then open
 `chrome://extensions`, enable Developer mode, and load its folder using
 **Load unpacked**. If already installed from that folder, replace its files,
 click **Reload**, and refresh manga tabs. The extension needs the local app.

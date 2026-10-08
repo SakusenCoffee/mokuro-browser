@@ -86,8 +86,12 @@ installation log below it shows download and installation activity.
    **Auto-scan manga**. Hover over its text and use your usual Yomitan shortcut.
 
 The popup's **Hover text size** slider adjusts overlays from 50% to 200% and
-updates existing text immediately. Two-digit numbers stay together in vertical
-text. Hover backgrounds cover the original text and adjacent furigana.
+updates existing text immediately. All text areas in a scanned page use one
+shared base font at 100%; the slider resizes that normalized text. Columns and
+rows are laid out with consistent spacing, and white boxes fit the rendered
+text. Original coordinates anchor each group rather than controlling its gaps.
+Two-digit numbers stay together in vertical text. Original text and adjacent
+furigana are covered while the replacement text is visible.
 The page controls appear as a faint blue orb in the bottom-right corner when
 hovering over OCR text, selecting it, or hovering over that corner. Hover or
 keyboard-focus the orb to reveal **Show text**, **All text**, and **Clear**.
