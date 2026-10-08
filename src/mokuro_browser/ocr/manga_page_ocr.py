@@ -10,6 +10,7 @@ from mokuro import __version__
 from mokuro.cache import cache
 from mokuro.utils import imread
 from .paragraphs import recover_paragraphs
+from .covers import CoverOcr, merge_cover_text
 from manga_ocr.ocr import post_process
 import torch
 from pathlib import Path
@@ -71,6 +72,8 @@ class MangaPageOcr:
             self.mocr = MangaOcr(cached_model_path(pretrained_model_name_or_path), force_cpu)
             self.mocr.model.eval()
             self.device = str(self.mocr.model.device)
+            logger.info("Initializing local PP-OCRv6 cover text detector and recognizer")
+            self.cover_ocr = CoverOcr()
             if self.ocr_batch_size is None:
                 self.ocr_batch_size = 8 if device == "cuda" else 1
 
@@ -103,6 +106,12 @@ class MangaPageOcr:
         if self.disable_ocr:
             return result
 
+        if self.device == "cpu":
+            # ONNX session initialization can reset the CPU's tiny-float mode.
+            # The comic detector has near-zero weights: processing denormals
+            # made its convolutions ~30x slower on the tested x64 CPU. Flush
+            # only subnormal floats; do not reduce normal inference precision.
+            torch.set_flush_denormal(True)
         with torch.inference_mode():
             mask, mask_refined, blk_list = self.text_detector(img, refine_mode=1, keep_undetected_mask=True)
         if self.paragraph_recovery:
@@ -151,6 +160,8 @@ class MangaPageOcr:
         for (block, line_index), text in zip(destinations, self.recognize_crops(crops)):
             block["lines"][line_index] += text
 
+        result["blocks"] = merge_cover_text(img, result["blocks"], self.cover_ocr.recognize(img))
+        result["ocr_revision"] = 2
         return result
 
     @staticmethod

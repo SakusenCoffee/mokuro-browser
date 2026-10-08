@@ -263,7 +263,9 @@ from mokuro_browser.cli import export_extension
 from mokuro_browser.config import pairing_token
 from mokuro_browser.native_host import install_native_host
 from mokuro_browser.ocr.manga_page_ocr import MangaPageOcr
+from mokuro_browser.ocr.covers import CoverOcr
 MangaPageOcr(disable_ocr=True)
+CoverOcr()
 helper = sys.argv[1] or None
 registered = sys.argv[2] == "1"
 export_browser_extension = sys.argv[3] == "1"

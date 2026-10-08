@@ -20,6 +20,23 @@ class OcrTests(unittest.TestCase):
         self.assertEqual(MangaPageOcr.__module__, "mokuro_browser.ocr.manga_page_ocr")
         self.assertEqual(TextDetBase.__module__, "mokuro_browser.ocr.basemodel")
 
+    def test_cpu_inference_restores_fast_tiny_float_processing(self):
+        ocr = MangaPageOcr(disable_ocr=True, paragraph_recovery=False)
+        ocr.disable_ocr = False
+        ocr.text_detector = mock.Mock(return_value=(None, None, []))
+        ocr.cover_ocr = mock.Mock()
+        ocr.cover_ocr.recognize.return_value = []
+        image = np.full((30, 30, 3), 255, dtype=np.uint8)
+        with mock.patch.object(ocr, "recognize_crops", return_value=[]), \
+                mock.patch("torch.set_flush_denormal") as flush:
+            ocr.device = "cpu"
+            self.assertEqual(ocr.recognize_image(image)["ocr_revision"], 2)
+            flush.assert_called_once_with(True)
+            flush.reset_mock()
+            ocr.device = "cuda"
+            ocr.recognize_image(image)
+            flush.assert_not_called()
+
     def test_only_complete_cached_default_models_skip_remote_startup(self):
         with tempfile.TemporaryDirectory() as directory:
             snapshot = Path(directory)

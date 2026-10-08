@@ -56,7 +56,7 @@ async function getPageResult(tabId, target) {
     const request = store.get([tabId, key]); request.onsuccess = () => done(request.result);
   });
   if (!record) return {};
-  if (record.version !== 1 || !MokuroResults.valid(record.result)
+  if (record.version !== 2 || !MokuroResults.valid(record.result)
       || record.result.img_width !== target.width || record.result.img_height !== target.height
       || record.digest !== await resultDigest(record.result)) {
     await cacheTransaction("readwrite", store => store.delete([tabId, key]));
@@ -74,7 +74,7 @@ async function savePageResult(tabId, target, result) {
   if (closedTabs.has(tabId)) return;
   await chrome.tabs.get(tabId);
   await cacheTransaction("readwrite", store => {
-    if (!closedTabs.has(tabId)) store.put({tabId, key, version: 1, result, digest});
+    if (!closedTabs.has(tabId)) store.put({tabId, key, version: 2, result, digest});
   });
 }
 

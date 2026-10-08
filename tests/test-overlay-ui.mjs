@@ -71,8 +71,10 @@ try {
   assert.deepEqual(await evaluate(`MokuroResults.verticalParts('123年')`), ['1','2','3','年']);
   const orbOpacity = () => evaluate(`getComputedStyle(document.querySelector('.orb')).opacity`);
   assert.equal(await orbOpacity(), '0');
+  assert.equal(await evaluate(`document.querySelectorAll('.toolbar button').length`), 1);
+  assert.equal(await evaluate(`parseFloat(getComputedStyle(document.querySelector('.orb')).width)`), 24);
   await page('Input.dispatchMouseEvent', {type:'mouseMoved', x:160, y:130});
-  await sleep(250);
+  await sleep(350);
   assert.equal(await orbOpacity(), '0.35');
   const metrics = await evaluate(`(()=>{
     const line=document.querySelectorAll('.line')[2], span=line.querySelector('.digits');
@@ -112,16 +114,33 @@ try {
   await sleep(50);
   assert(Math.abs(await measure() / width - .5) < .01);
   assert.equal(await evaluate(`getComputedStyle(document.querySelector('.ink-mask')).opacity`), '1');
-  await page('Input.dispatchMouseEvent', {type:'mouseMoved', x:650, y:550});
-  await sleep(250);
-  assert.equal(await evaluate(`getComputedStyle(document.querySelector('.toolbar-actions')).visibility`), 'visible');
+  await page('Input.dispatchMouseEvent', {type:'mouseMoved', x:664, y:564});
+  await sleep(350);
+  assert.equal(await orbOpacity(), '0.65');
+  await evaluate(`document.querySelector('.orb').click()`);
+  assert.equal(await evaluate(`document.querySelector('.panel pre').textContent`), result.blocks[0].lines.join('\n'));
+  assert.equal(await evaluate(`getComputedStyle(document.querySelector('.panel')).backgroundColor`), 'rgba(8, 12, 18, 0.88)');
+  assert.equal(await evaluate(`getComputedStyle(document.querySelector('.panel pre')).color`), 'rgb(237, 243, 251)');
+  await evaluate(`document.querySelector('.orb').click()`);
+  assert.equal(await evaluate(`document.querySelector('.panel')`), null);
+  await evaluate(`document.querySelector('.orb').click();document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}))`);
+  assert.equal(await evaluate(`document.querySelector('.panel')`), null);
   await page('Input.dispatchMouseEvent', {type:'mouseMoved', x:500, y:300});
-  await sleep(250);
+  await sleep(350);
   assert.equal(await orbOpacity(), '0');
-  assert.equal(await evaluate(`getComputedStyle(document.querySelector('.toolbar-actions')).visibility`), 'hidden');
+  assert.equal(await evaluate(`document.querySelector('.toolbar-actions')`), null);
+  // The transition also applies to every subsequent appearance/disappearance.
+  await page('Input.dispatchMouseEvent', {type:'mouseMoved', x:664, y:564});
+  await sleep(120);
+  assert(Number(await orbOpacity()) > 0 && Number(await orbOpacity()) < .65);
+  await sleep(250);
+  await page('Input.dispatchMouseEvent', {type:'mouseMoved', x:500, y:300});
+  await sleep(120);
+  assert(Number(await orbOpacity()) > 0 && Number(await orbOpacity()) < .65);
+  await sleep(250);
   await evaluate(`(()=>{const range=document.createRange();range.selectNodeContents(document.querySelector('.line'));
     const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range)})()`);
-  await sleep(250);
+  await sleep(350);
   assert.equal(await orbOpacity(), '0.35', 'selecting OCR text reveals the orb');
   // Mixed font sizes, a very narrow ellipsis, a wide region box and horizontal
   // lines: every glyph gets the page median while masks remain source-sized.
@@ -172,7 +191,7 @@ try {
     await evaluate(`storageChanged({hoverFontPercent:{newValue:100}},'local')`);
     const rendered=await evaluate(`deliver(${JSON.stringify({type:'RENDER',target,result:bubbleResult})})`);
     assert(!rendered.error,JSON.stringify(rendered));
-    await evaluate(`document.querySelector('.toolbar-actions button').click()`);
+    await evaluate(`document.querySelector('.layer').classList.add('pinned')`);
     const shot=await page('Page.captureScreenshot',{format:'png'});
     await writeFile('/tmp/mokuro-normalized-bubble.png',Buffer.from(shot.data,'base64'));
   }

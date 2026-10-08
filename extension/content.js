@@ -52,18 +52,18 @@
     .notice{bottom:24px;left:24px;max-width:430px;padding:14px 18px;white-space:pre-wrap}
     .notice.error{color:#9e3127;border-color:#d8afa6}
     .toolbar{position:fixed;bottom:24px;right:24px;width:44px;height:44px;pointer-events:auto}
-    .orb{display:block;width:44px;height:44px;padding:0;border-radius:50%;border:1px solid #9ad6ff;
+    .orb{display:block;position:absolute;right:0;bottom:0;width:24px;height:24px;padding:0;border-radius:50%;border:1px solid #9ad6ff;
       background:radial-gradient(circle at 35% 30%,#e0f5ff,#76b9ed 65%,#4a8dcd);box-shadow:0 0 14px #80c9ff70;
-      opacity:0;transition:opacity .18s;cursor:pointer}
-    .layer:has(.block:hover) ~ .toolbar .orb,.toolbar.selection .orb{opacity:.35}
-    .toolbar:hover .orb,.toolbar:focus-within .orb{opacity:.65}
+      opacity:0;transform:scale(.8);transition:opacity .3s ease,transform .3s ease;cursor:pointer}
+    .layer:has(.block:hover) ~ .toolbar.ready .orb,.toolbar.ready.selection .orb{opacity:.35;transform:scale(1)}
+    .toolbar.ready:hover .orb,.toolbar.ready:focus-within .orb{opacity:.65;transform:scale(1)}
     .orb:hover{background:radial-gradient(circle at 35% 30%,#e0f5ff,#76b9ed 65%,#4a8dcd)}
-    .toolbar-actions{position:absolute;right:0;bottom:44px;padding-bottom:10px;display:flex;gap:5px;
-      width:max-content;opacity:0;visibility:hidden;pointer-events:none}
-    .toolbar:hover .toolbar-actions,.toolbar:focus-within .toolbar-actions{opacity:1;visibility:visible;pointer-events:auto}
     button{font:600 12px system-ui;color:#225c50;background:#eef3e9;border:0;border-radius:7px;padding:9px 11px;cursor:pointer}
-    button:hover{background:#dfe9d9}.panel{top:24px;right:24px;width:360px;max-width:90vw;max-height:70vh;overflow:auto;padding:18px}
-    .panel pre{display:block;white-space:pre-wrap;font:16px/1.8 "Noto Sans JP",sans-serif;user-select:text;margin:14px 0 0}
+    button:hover{background:#dfe9d9}.panel{top:24px;right:24px;width:360px;max-width:90vw;max-height:70vh;overflow:auto;padding:18px;
+      color:#edf3fb;background:rgba(8,12,18,.88);border-color:#91a9c23f;box-shadow:0 8px 32px #0006;backdrop-filter:blur(12px)}
+    .panel button{color:#edf3fb;background:#ffffff14;border:1px solid #ffffff25}
+    .panel button:hover{background:#ffffff24}
+    .panel pre{display:block;white-space:pre-wrap;font:16px/1.8 "Noto Sans JP",sans-serif;color:inherit;user-select:text;margin:14px 0 0}
     .pick-outline{position:fixed;pointer-events:none;border:3px solid #34a78b;background:#34a78b12;border-radius:4px}
   `.replace(/(^|})\s*([^{}]+)\{/g, (_, end, selectors) =>
     `${end} ${selectors.split(",").map(selector => `#local-mokuro-overlay ${selector.trim()}`).join(",")} {`);
@@ -123,35 +123,34 @@
   function toolbar() {
     root.querySelector(".toolbar")?.remove();
     const bar = document.createElement("div"); bar.className = "toolbar";
-    const orb = button("", () => orb.focus()); orb.className = "orb";
-    orb.setAttribute("aria-label", "Mokuro text controls");
-    orb.title = "Mokuro text controls";
-    const actions = document.createElement("div"); actions.className = "toolbar-actions";
-    const toggle = button("Show text", () => {
-      const pinned = ![...layers].some(item => item.node.classList.contains("pinned"));
-      for (const item of layers) item.node.classList.toggle("pinned", pinned);
-      toggle.textContent = pinned ? "Hover text" : "Show text";
-    });
-    actions.append(toggle, button("All text", () => {
+    const orb = button("", () => {
       if (panel) { panel.remove(); panel = null; return; }
       panel = document.createElement("section"); panel.className = "panel";
+      panel.setAttribute("aria-label", "All scanned text");
       panel.append(button("Copy all text", async () => {
         try { await navigator.clipboard.writeText(fullText); notify("Copied OCR text.", false, true); }
         catch { notify("Select the text below and copy it with Ctrl+C.", false, true); }
       }));
       const pre = document.createElement("pre"); pre.textContent = fullText;
       panel.append(pre); root.append(panel);
-    }), button("Clear", () => {
-      clear(true); chrome.runtime.sendMessage({type: "CANCEL"}).catch(() => {});
-    }));
-    bar.append(orb, actions);
+    });
+    orb.className = "orb";
+    orb.setAttribute("aria-label", "Show all scanned text");
+    orb.title = "All scanned text";
+    bar.append(orb);
     bar.addEventListener("click", event => {
       // Mouse clicks should not leave the hover menu latched open. Keyboard
       // users retain focus so the controls remain reachable with Tab.
       if (event.detail > 0 && bar.contains(document.activeElement)) document.activeElement.blur();
     });
     root.append(bar);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (bar.isConnected) bar.classList.add("ready");
+    }));
   }
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && panel) { panel.remove(); panel = null; }
+  });
   document.addEventListener("selectionchange", () => {
     const selection = window.getSelection();
     root.querySelector(".toolbar")?.classList.toggle("selection", !!selection && !selection.isCollapsed

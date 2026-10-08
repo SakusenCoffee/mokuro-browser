@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mokuro-browser"
-version = "0.1.10"
+version = "0.1.11"
 description = "Local Mokuro OCR for Chrome and Firefox with selectable Japanese manga text"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "GPL-3.0-only"
 license-files = ["LICENSE", "THIRD_PARTY.md"]
-dependencies = ["mokuro>=0.2.2,<=0.2.5", "platformdirs>=4", "Pillow>=9", "huggingface-hub>=0.26", "setuptools<81", "psutil>=5.9.6"]
+dependencies = ["mokuro>=0.2.2,<=0.2.5", "platformdirs>=4", "Pillow>=9", "huggingface-hub>=0.26", "setuptools<81", "psutil>=5.9.6", "rapidocr==3.10.0", "onnxruntime>=1.24.2,<2"]
 
 [project.scripts]
 mokuro-browser = "mokuro_browser.cli:main"

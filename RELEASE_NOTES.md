@@ -1,4 +1,42 @@
-# v0.1.10 — Page-based reading history and live reader fixes
+# v0.1.11 — Cover OCR and minimal page controls
+
+## Cover and magazine OCR
+
+- Adds a second local detector and recognizer: PP-OCRv6 small via pinned
+  RapidOCR 3.10.0 and ONNX Runtime. Its models are included in the installed
+  dependency; scans stay on your computer and work offline after setup.
+- Independently finds previously missing text and replaces colored, oversized
+  or widely spaced cover lettering. Manga OCR remains the main dialogue model.
+- Merges results line by line without duplicate overlays or dropping a whole
+  paragraph when only part of it is found. A low-confidence colored label can
+  be retried without adjacent decorative artwork.
+- The supplied examples now recognize 特別読切, 性別超越,
+  青春ラブストーリー!! and the previously missed 演劇. This is an accuracy
+  improvement, not a guarantee for every cover or stylized font.
+- Prevents a CPU tiny-float processing slowdown when combining the two model
+  runtimes. The supplemental OCR pass took about 0.1–0.3 seconds on the supplied
+  cover crops in local CPU checks; larger pages and other computers vary.
+- Setup checks that both new bundled models can load before marking the
+  installation complete.
+
+## Extension 1.6.0
+
+- Removes the bottom-right Show text / All text / Clear buttons.
+- Uses a smaller 24-pixel blue orb with a fade-in and fade-out on every
+  appearance. Hover OCR text, select it, or hover the corner to reveal it.
+- Clicking the orb opens all scanned text in a dark, translucent panel;
+  click again or press Escape to close it. Copy all text remains in the panel.
+- Clearing overlays is still available from the popup and image context menu.
+- Invalidates old cached overlays so previously incorrect scans are not
+  silently reused. Existing saved reading history and edits are not erased.
+
+Update **both the desktop launcher and the extension**, restart the server,
+refresh manga tabs and scan again. Use `mokuro-browser-extension-1.6.0.zip` with
+these launchers. All existing history, pairing and font-size settings remain.
+
+---
+
+## Previously included: v0.1.10
 
 ## Reading history and live reader
 
@@ -17,7 +55,8 @@
 
 Download and run the updated launcher for your OS, or use **Update launcher**.
 Let it update the installation and restart the server. Existing history and
-browser pairing are retained. No extension update is needed for these changes.
+browser pairing are retained. No extension update was needed for those history
+changes alone.
 
 ## Browser extension update: 1.5.4
 

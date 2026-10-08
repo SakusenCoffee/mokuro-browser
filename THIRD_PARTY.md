@@ -16,8 +16,15 @@ Bundled modified OCR sources:
   use GPL-3.0; their notices and upstream links are retained here.
 - `ocr/paragraphs.py` implements the local paragraph recovery improvements.
 
-Model weights are not included. Mokuro/manga-ocr obtain their normal models
-through their existing cache/download mechanisms. Other dependencies retain
+Mokuro/manga-ocr weights are not included; they obtain their normal models
+through their existing cache/download mechanisms. Cover OCR additionally uses
+[RapidOCR](https://github.com/RapidAI/RapidOCR) 3.10.0 (Apache-2.0) and its bundled
+[PP-OCRv6 small detection](https://huggingface.co/PaddlePaddle/PP-OCRv6_small_det_onnx)
+and [recognition](https://huggingface.co/PaddlePaddle/PP-OCRv6_small_rec_onnx)
+models from PaddlePaddle (Apache-2.0), run locally with
+[ONNX Runtime](https://github.com/microsoft/onnxruntime) (MIT).
+These weights and their license notices are installed by the RapidOCR dependency;
+they are not copied into this repository. Other dependencies retain
 their respective licenses. No manga images, library OCR files or dictionary
 contents are included in this repository or distribution.
 

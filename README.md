@@ -92,9 +92,18 @@ rows are laid out with consistent spacing, and white boxes fit the rendered
 text. Original coordinates anchor each group rather than controlling its gaps.
 Two-digit numbers stay together in vertical text. Original text and adjacent
 furigana are covered while the replacement text is visible.
-The page controls appear as a faint blue orb in the bottom-right corner when
-hovering over OCR text, selecting it, or hovering over that corner. Hover or
-keyboard-focus the orb to reveal **Show text**, **All text**, and **Clear**.
+The small blue orb in the bottom-right corner fades in when hovering over OCR
+text, selecting it, or hovering over that corner, and fades out afterwards.
+Click it to open all scanned text in a dark, translucent panel with a copy
+button. Click again or press Escape to close it. Clearing OCR remains available
+in the extension popup and image context menu.
+
+Cover and magazine lettering gets a second local OCR pass using PP-OCRv6 small
+via RapidOCR. It finds additional text and improves colored, large and widely
+spaced lettering, while ordinary dialogue stays with Manga OCR. The new models
+ship with the installed dependency and work offline. This improves recognition,
+not a guarantee for every stylized font. Update both the desktop app and the
+extension, then scan again; old cached overlays are invalidated automatically.
 
 Browsers require this extension installation step; the desktop installer cannot
 silently enable an extension. Firefox's temporary installation lasts until
