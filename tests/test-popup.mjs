@@ -7,6 +7,7 @@ const source = await readFile(new URL('../extension/popup.js', import.meta.url),
 async function popupWithHealth(health) {
   const elements = new Map();
   let tick;
+  const saved = {};
   const element = selector => {
     if (!elements.has(selector)) elements.set(selector, {
       textContent: '', disabled: false, open: false, value: '', parentElement: {hidden: false},
@@ -21,7 +22,10 @@ async function popupWithHealth(health) {
     setInterval(callback) { tick = callback; },
     document: {querySelector: element, getElementById: element},
     chrome: {
-      storage: {onChanged: {addListener() {}}, local: {get: async () => ({autoScan: false, pairingToken: 'saved-code'})}},
+      storage: {onChanged: {addListener() {}}, local: {
+        get: async () => ({autoScan: false, pairingToken: 'saved-code', hoverFontPercent: 125}),
+        set: async value => Object.assign(saved, value)
+      }},
       runtime: {sendMessage: async message => {
         if (message.type === 'SERVER_STATUS') return {ok: false, error: 'Specified native messaging host not found.'};
         if (message.type === 'HEALTH') return health;
@@ -33,6 +37,7 @@ async function popupWithHealth(health) {
   vm.runInContext(source, context);
   await new Promise(resolve => setImmediate(resolve));
   element.tick = () => tick();
+  element.saved = saved;
   return element;
 }
 
@@ -44,6 +49,11 @@ assert.equal(connected('#server').disabled, true);
 assert.equal(connected('#pairing').open, false);
 assert.equal(connected('#pairing-code').value, 'saved-code');
 assert.equal(connected('#gpu-load').parentElement.hidden, true);
+assert.equal(connected('#hover-font-size').value, '125');
+connected('#hover-font-size').value = '150';
+await connected('#hover-font-size').oninput();
+assert.equal(connected.saved.hoverFontPercent, 150);
+assert.equal(connected('#hover-font-value').textContent, '150%');
 
 const legacy = await popupWithHealth({ok: true, data: {model: 'loaded'}});
 assert.match(legacy('#status').textContent, /update the Mokuro Browser launcher/);

@@ -115,7 +115,7 @@ try {
   assert(fitted, 'Text in each block uses a shared font size that fits the detected columns');
   await page.evaluate("document.querySelector('#manga').style.width='560px'");
   await waitFor(async () => (await inspect("function(){return parseFloat(this.querySelector('.layer').style.width)}")) === 560, "responsive overlay");
-  await inspect("function(){this.querySelector('.toolbar button').click();return true}");
+  await inspect("function(){this.querySelector('.toolbar-actions button').click();return true}");
   assert.equal(await inspect("function(){return this.querySelector('.layer').classList.contains('pinned')}"), true);
   // Exercise the actual installed Yomitan caret scanner against ordinary DOM
   // OCR text. No dictionaries or production profile writes are required.
@@ -134,7 +134,7 @@ try {
       x:rect.x+rect.width/2,y:rect.y+rect.height/2};
   })()`);
   assert(scanned?.text && scanned.text.startsWith(scanned.expected.slice(0, 1)), `Yomitan extracts OCR text from a screen coordinate: ${JSON.stringify(scanned)}`);
-  await inspect("function(){this.querySelector('.toolbar button').click();return true}");
+  await inspect("function(){this.querySelector('.toolbar-actions button').click();return true}");
   await page.send("Input.dispatchMouseEvent", {type: "mouseMoved", x: scanned.x, y: scanned.y});
   const hoverScan = await page.evaluate(`(()=>{
     const source=qaScanner.getRangeFromPoint(${scanned.x},${scanned.y},
@@ -171,10 +171,10 @@ try {
     await page.send("Input.dispatchMouseEvent", {type:"mouseReleased", button:"left", clickCount:1, ...point});
   }
   assert.equal(await page.evaluate("qaPageTurns"), 2, "real clicks reach the reader's page-turn handler");
-  await inspect("function(){this.querySelector('.toolbar button').click();return true}");
-  await inspect("function(){this.querySelectorAll('.toolbar button')[1].click();return true}");
+  await inspect("function(){this.querySelector('.toolbar-actions button').click();return true}");
+  await inspect("function(){this.querySelectorAll('.toolbar-actions button')[1].click();return true}");
   assert((await inspect("function(){return this.querySelector('.panel pre').textContent}")).includes("活な少女。"));
-  await inspect("function(){this.querySelectorAll('.toolbar button')[1].click();return true}");
+  await inspect("function(){this.querySelectorAll('.toolbar-actions button')[1].click();return true}");
   const screenshot = await page.send("Page.captureScreenshot", {format: "png"});
   await writeFile(path.join(os.tmpdir(), "mokuro-browser-extension-qa.png"), Buffer.from(screenshot.data, "base64"));
   await worker.evaluate(`launch({type:'CLEAR',tabId:${tabId}}, {})`);

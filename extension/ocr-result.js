@@ -1,6 +1,11 @@
 // Shared by the worker and content script: completed geometry, not a promise
 // that OCR recognized every word on the source image.
 globalThis.MokuroResults = {
+  verticalParts(text) {
+    // Tate-chu-yoko: a two-digit number occupies one vertical character cell.
+    // Preserve original characters for copying and dictionary lookup.
+    return text.match(/(?<![0-9０-９])[0-9０-９]{2}(?![0-9０-９])|[\s\S]/gu) || [];
+  },
   valid(result) {
     const point = value => Array.isArray(value) && value.length === 2 && value.every(Number.isFinite);
     return !!result && Number.isFinite(result.img_width) && result.img_width > 0

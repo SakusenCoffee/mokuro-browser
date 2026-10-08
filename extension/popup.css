@@ -28,3 +28,7 @@ details[open] .pair-arrow { transform: rotate(180deg); }
 label { display: block; margin-bottom: 5px; }
 input { box-sizing: border-box; width: 100%; padding: 9px; color: #eef4f2; background: #172421; border: 1px solid #658b7f; border-radius: 7px; }
 #pair { background: #397e6e; border-color: #68ab97; }
+.font-control { margin: 14px 0; }
+.font-control label { font-size: 12px; display: flex; justify-content: space-between; }
+#hover-font-value { color: #b5e6d5; font-variant-numeric: tabular-nums; }
+#hover-font-size { padding: 0; accent-color: #75b7a4; cursor: pointer; }

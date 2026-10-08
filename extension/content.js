@@ -16,6 +16,7 @@
   let clearedKey = null;
   let missingKey = null;
   let missingUntil = 0;
+  let hoverFontPercent = 100;
   const attempted = new Map();
 
   const host = document.createElement("div");
@@ -27,18 +28,39 @@
   const root = host;
   const style = document.createElement("style");
   style.textContent = `
-    #local-mokuro-overlay :where(div,p,section,pre,button){all:initial;box-sizing:border-box}
+    #local-mokuro-overlay :where(div,p,span,section,pre,button){all:initial;box-sizing:border-box}
   ` + `
     .layer{position:absolute;overflow:hidden;pointer-events:none}
     .inner{position:absolute;transform-origin:0 0;pointer-events:none}.block{position:absolute;pointer-events:none}
-    .block:hover{z-index:1000}.line{position:absolute;white-space:nowrap;color:#111;background:white;
+    .block:hover{z-index:1000}
+    .hit-area{position:absolute;pointer-events:auto}
+    .text-surface{position:absolute;inset:0;pointer-events:none;opacity:0;background:white;
+      transform:scale(var(--mokuro-font-scale,1));transform-origin:top left}
+    .text-surface.vertical{transform-origin:top right}
+    .text-surface::before{content:"";position:absolute;inset:-2px;pointer-events:none;background:white}
+    .text-surface.vertical::before{right:calc(-.8 * var(--mokuro-base-font))}
+    .text-surface.horizontal::before{top:calc(-.8 * var(--mokuro-base-font))}
+    .block:hover .text-surface,.layer.pinned .text-surface{opacity:1}
+    .line{position:absolute;white-space:nowrap;color:#111;background:white;
       margin:0;font-family:"Noto Sans JP","Meiryo",sans-serif;line-height:1.1;letter-spacing:.03em;user-select:text;cursor:text;
-      display:block;opacity:0;pointer-events:auto;border:0;outline:none}
-    .block:hover .line,.layer.pinned .line{opacity:1}
-    .notice,.toolbar,.panel{position:fixed;pointer-events:auto;font:13px/1.5 system-ui,sans-serif;color:#203b35;
+      display:block;pointer-events:none;border:0;outline:none;text-orientation:upright}
+    .block:hover .line,.layer.pinned .line{pointer-events:auto}
+    .digits{text-combine-upright:all;writing-mode:inherit;text-orientation:inherit;
+      font:inherit;color:inherit;letter-spacing:0;user-select:text;pointer-events:inherit;white-space:inherit}
+    .notice,.panel{position:fixed;pointer-events:auto;font:13px/1.5 system-ui,sans-serif;color:#203b35;
       background:#fffcf3;border:1px solid #c7d8cd;box-shadow:0 3px 20px #0003;border-radius:12px}
     .notice{bottom:24px;left:24px;max-width:430px;padding:14px 18px;white-space:pre-wrap}
-    .notice.error{color:#9e3127;border-color:#d8afa6}.toolbar{bottom:24px;right:24px;display:flex;padding:6px;gap:5px;align-items:center}
+    .notice.error{color:#9e3127;border-color:#d8afa6}
+    .toolbar{position:fixed;bottom:24px;right:24px;width:44px;height:44px;pointer-events:auto}
+    .orb{display:block;width:44px;height:44px;padding:0;border-radius:50%;border:1px solid #9ad6ff;
+      background:radial-gradient(circle at 35% 30%,#e0f5ff,#76b9ed 65%,#4a8dcd);box-shadow:0 0 14px #80c9ff70;
+      opacity:0;transition:opacity .18s;cursor:pointer}
+    .layer:has(.block:hover) ~ .toolbar .orb,.toolbar.selection .orb{opacity:.35}
+    .toolbar:hover .orb,.toolbar:focus-within .orb{opacity:.65}
+    .orb:hover{background:radial-gradient(circle at 35% 30%,#e0f5ff,#76b9ed 65%,#4a8dcd)}
+    .toolbar-actions{position:absolute;right:0;bottom:44px;padding-bottom:10px;display:flex;gap:5px;
+      width:max-content;opacity:0;visibility:hidden;pointer-events:none}
+    .toolbar:hover .toolbar-actions,.toolbar:focus-within .toolbar-actions{opacity:1;visibility:visible;pointer-events:auto}
     button{font:600 12px system-ui;color:#225c50;background:#eef3e9;border:0;border-radius:7px;padding:9px 11px;cursor:pointer}
     button:hover{background:#dfe9d9}.panel{top:24px;right:24px;width:360px;max-width:90vw;max-height:70vh;overflow:auto;padding:18px}
     .panel pre{display:block;white-space:pre-wrap;font:16px/1.8 "Noto Sans JP",sans-serif;user-select:text;margin:14px 0 0}
@@ -46,6 +68,10 @@
   `.replace(/(^|})\s*([^{}]+)\{/g, (_, end, selectors) =>
     `${end} ${selectors.split(",").map(selector => `#local-mokuro-overlay ${selector.trim()}`).join(",")} {`);
   root.append(style);
+  function setFontPercent(value) {
+    hoverFontPercent = Number.isFinite(Number(value)) ? Math.min(200, Math.max(50, Number(value))) : 100;
+    host.style.setProperty("--mokuro-font-scale", hoverFontPercent / 100);
+  }
   const notice = document.createElement("div");
   notice.className = "notice";
   notice.style.display = "none";
@@ -97,12 +123,16 @@
   function toolbar() {
     root.querySelector(".toolbar")?.remove();
     const bar = document.createElement("div"); bar.className = "toolbar";
+    const orb = button("", () => orb.focus()); orb.className = "orb";
+    orb.setAttribute("aria-label", "Mokuro text controls");
+    orb.title = "Mokuro text controls";
+    const actions = document.createElement("div"); actions.className = "toolbar-actions";
     const toggle = button("Show text", () => {
       const pinned = ![...layers].some(item => item.node.classList.contains("pinned"));
       for (const item of layers) item.node.classList.toggle("pinned", pinned);
       toggle.textContent = pinned ? "Hover text" : "Show text";
     });
-    bar.append(toggle, button("All text", () => {
+    actions.append(toggle, button("All text", () => {
       if (panel) { panel.remove(); panel = null; return; }
       panel = document.createElement("section"); panel.className = "panel";
       panel.append(button("Copy all text", async () => {
@@ -114,8 +144,19 @@
     }), button("Clear", () => {
       clear(true); chrome.runtime.sendMessage({type: "CANCEL"}).catch(() => {});
     }));
+    bar.append(orb, actions);
+    bar.addEventListener("click", event => {
+      // Mouse clicks should not leave the hover menu latched open. Keyboard
+      // users retain focus so the controls remain reachable with Tab.
+      if (event.detail > 0 && bar.contains(document.activeElement)) document.activeElement.blur();
+    });
     root.append(bar);
   }
+  document.addEventListener("selectionchange", () => {
+    const selection = window.getSelection();
+    root.querySelector(".toolbar")?.classList.toggle("selection", !!selection && !selection.isCollapsed
+      && root.contains(selection.anchorNode));
+  });
 
   function fitPosition(value, remaining) {
     if (value.endsWith("%")) return remaining * parseFloat(value) / 100;
@@ -154,7 +195,8 @@
         const top = Math.min(...poly.map(point => point[1]));
         const width = Math.max(...poly.map(point => point[0])) - left;
         const height = Math.max(...poly.map(point => point[1])) - top;
-        const units = [...text].reduce((sum, char) => sum + (/[^\u0000-\u00ff]/.test(char) ? 1 : .5), 0);
+        const units = block.vertical ? MokuroResults.verticalParts(text).length
+          : [...text].reduce((sum, char) => sum + (/[^\u0000-\u00ff]/.test(char) ? 1 : .5), 0);
         // A short column must still fit its detected width. Using only its
         // length makes two-character columns grow across neighbouring text.
         const across = block.vertical ? width : height;
@@ -165,12 +207,35 @@
       // Lines in one detected text block share a type size. Otherwise a short
       // phrase grows much larger than its longer neighbours on hover.
       const font = Math.min(...lines.map(line => line.font));
+      if (!lines.length) continue;
+      const surface = document.createElement("div");
+      surface.className = `text-surface ${block.vertical ? "vertical" : "horizontal"}`;
+      surface.style.setProperty("--mokuro-base-font", `${font}px`);
       for (const {text, left, top, width, height} of lines) {
-        const line = document.createElement("p"); line.className = "line"; line.textContent = text;
+        // Keep the original hit regions at every zoom level so reducing the
+        // text size cannot make the hover target jump away from the pointer.
+        const hit = document.createElement("div"); hit.className = "hit-area";
+        hit.setAttribute("aria-hidden", "true");
+        Object.assign(hit.style, {left: `${left-x1}px`, top: `${top-y1}px`, width: `${width}px`, height: `${height}px`});
+        box.append(hit);
+        const line = document.createElement("p"); line.className = "line";
+        if (block.vertical) {
+          for (const part of MokuroResults.verticalParts(text)) {
+            if (part.length === 2 && /^[0-9０-９]{2}$/.test(part)) {
+              const digits = document.createElement("span"); digits.className = "digits";
+              digits.textContent = part; line.append(digits);
+            } else line.append(document.createTextNode(part));
+          }
+        } else line.textContent = text;
         Object.assign(line.style, {left: `${left-x1}px`, top: `${top-y1}px`, width: `${width}px`,
           height: `${height}px`, fontSize: `${font}px`, writingMode: block.vertical ? "vertical-rl" : "horizontal-tb"});
-        box.append(line);
+        surface.append(line);
       }
+      // The unscaled backdrop hides original ink even when text is reduced.
+      const backdrop = surface.cloneNode(false);
+      backdrop.classList.add("backdrop");
+      backdrop.style.transform = "none";
+      box.append(backdrop, surface);
       inner.append(box);
     }
     let frame = 0;
@@ -326,9 +391,13 @@
     scheduleAuto();
   }
 
-  chrome.storage.local.get({autoScan: false}).then(settings => setAuto(settings.autoScan));
+  chrome.storage.local.get({autoScan: false, hoverFontPercent: 100}).then(settings => {
+    setAuto(settings.autoScan);
+    setFontPercent(settings.hoverFontPercent);
+  });
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === "local" && changes.autoScan) setAuto(changes.autoScan.newValue);
+    if (area === "local" && changes.hoverFontPercent) setFontPercent(changes.hoverFontPercent.newValue ?? 100);
   });
   const observer = new MutationObserver(records => {
     // Ignore our own overlay updates so progress notices don't restart the debounce.

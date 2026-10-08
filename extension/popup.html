@@ -14,6 +14,11 @@
   </details>
   <button id="auto" aria-pressed="false">Auto-scan manga: Off</button>
   <p class="auto-hint">When on, scan visible manga images as you turn pages or scroll.</p>
+  <div class="font-control">
+    <label for="hover-font-size">Hover text size <output id="hover-font-value" for="hover-font-size">100%</output></label>
+    <input id="hover-font-size" type="range" min="50" max="200" step="5" value="100" disabled>
+    <p class="auto-hint">Updates existing text immediately. 100% uses the detected size.</p>
+  </div>
   <button id="largest" class="primary">Scan manga image</button>
   <button id="check">Check / restore page text</button>
   <button id="pick">Choose an image on this page</button>

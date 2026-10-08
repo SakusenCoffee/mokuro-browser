@@ -85,6 +85,13 @@ installation log below it shows download and installation activity.
 3. Open a manga webpage and click **Scan manga image**, or turn on
    **Auto-scan manga**. Hover over its text and use your usual Yomitan shortcut.
 
+The popup's **Hover text size** slider adjusts overlays from 50% to 200% and
+updates existing text immediately. Two-digit numbers stay together in vertical
+text. Hover backgrounds cover the original text and adjacent furigana.
+The page controls appear as a faint blue orb in the bottom-right corner when
+hovering over OCR text, selecting it, or hovering over that corner. Hover or
+keyboard-focus the orb to reveal **Show text**, **All text**, and **Clear**.
+
 Browsers require this extension installation step; the desktop installer cannot
 silently enable an extension. Firefox's temporary installation lasts until
 Firefox closes; permanent Firefox installation requires Mozilla signing.
