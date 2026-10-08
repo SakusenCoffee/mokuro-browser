@@ -32,6 +32,17 @@ class CoverOcrTests(unittest.TestCase):
         scene = [block([15, 15, 105, 45], "ありがとラ", score=.96)]
         self.assertEqual(merge_cover_text(self.white, manga, scene), manga)
 
+    def test_unchanged_pages_preserve_original_block_reading_order(self):
+        manga = [block([200, 20, 230, 90], "先の台詞", vertical=True),
+                 block([20, 5, 50, 75], "次の台詞", vertical=True)]
+        self.assertIs(merge_cover_text(self.white, manga, []), manga)
+
+    def test_cover_order_uses_real_line_fonts_not_bad_primary_font_estimate(self):
+        manga = [block([20, 20, 200, 120], "誤読", font=300)]
+        scene = [block([20, 20, 200, 60], "性別超越", score=.99),
+                 block([20, 75, 200, 120], "青春ラブストーリー!!", score=.96)]
+        self.assertEqual(merge_cover_text(self.color, manga, list(reversed(scene))), scene)
+
     def test_widely_spaced_black_cover_letters_are_replaced(self):
         manga = [block([20, 25, 40, 90], "特別", vertical=True),
                  block([20, 125, 40, 150], "読", vertical=True)]

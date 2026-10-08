@@ -173,6 +173,8 @@ def merge_cover_text(image, manga_blocks, scene_blocks):
         if len(viable) == len(proposals):
             break
         proposals = viable
+    if not proposals:
+        return manga_blocks  # Do not reorder ordinary, unchanged dialogue.
     removed = {(id(block), index) for _, overlaps in proposals for block, index, _ in overlaps}
     accepted = [scene for scene, _ in proposals]
     kept = []
@@ -189,5 +191,7 @@ def merge_cover_text(image, manga_blocks, scene_blocks):
         kept.append(remaining)
     # Geometry-based ordering preserves right-to-left reading for nearby
     # vertical columns, while horizontal lines are ordered top to bottom.
+    ordering_font = float(np.median([block["font_size"] for block in accepted]))
     return sorted(kept + accepted, key=lambda block: (
-        int(block["box"][1] // max(16, typical_font)), -block["box"][0]))
+        int(block["box"][1] // max(16, ordering_font)),
+        -block["box"][0] if block["vertical"] else block["box"][0]))
