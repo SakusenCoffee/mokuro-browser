@@ -64,6 +64,25 @@ def set_gpu(record, enabled):
     core.atomic_write(path, json.dumps(settings, indent=2))
 
 
+def save_history(record):
+    try:
+        return json.loads(settings_path(record).read_text(encoding="utf-8")).get("save_history", True) is not False
+    except (OSError, ValueError, AttributeError):
+        return True
+
+
+def set_save_history(record, enabled):
+    path = settings_path(record)
+    try:
+        settings = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(settings, dict):
+            settings = {}
+    except (OSError, ValueError):
+        settings = {}
+    settings["save_history"] = bool(enabled)
+    core.atomic_write(path, json.dumps(settings, indent=2))
+
+
 def request(record, path, value=None):
     config = host_config(record)
     token = Path(config["token_file"]).read_text(encoding="utf-8").strip()

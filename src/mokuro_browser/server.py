@@ -19,7 +19,7 @@ from urllib.parse import parse_qs, urlsplit
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from . import __version__
-from .config import pairing_token, data_dir, preferences
+from .config import pairing_token, data_dir, preferences, update_preferences
 from .dashboard import DASHBOARD
 from .history import ReadingHistory
 from .monitor import LoadMonitor
@@ -225,7 +225,8 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized():
             return
         if route.path == "/health":
-            self.respond(200, {**self.server.engine.status(), "usage": self.server.monitor.sample()})
+            self.respond(200, {**self.server.engine.status(), "usage": self.server.monitor.sample(),
+                               "save_history": self.server.save_history})
         elif route.path == "/history":
             try:
                 query = parse_qs(route.query)
@@ -244,6 +245,9 @@ class Handler(BaseHTTPRequestHandler):
         route = urlsplit(self.path)
         if route.path in ("/history", "/history/delete") or re.fullmatch(r"/history/[a-f0-9]{64}", route.path):
             self.history_write(route.path)
+            return
+        if route.path == "/preferences":
+            self.preferences_write()
             return
         if route.path == "/shutdown":
             # Respond before requesting shutdown so the native-messaging host
@@ -284,8 +288,9 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(value, dict):
                 raise ValueError("Invalid reading history request.")
             if path == "/history":
-                result = self.server.history.add(value.get("page_id"), value.get("source_key"),
-                                                 value.get("lines"), value.get("title", ""))
+                result = ({"saved": False, "disabled": True} if not self.server.save_history else
+                          self.server.history.add(value.get("page_id"), value.get("source_key"),
+                                                  value.get("lines"), value.get("title", "")))
             elif path == "/history/delete":
                 result = self.server.history.delete_pages(value.get("page_ids"))
             elif value.get("action") == "delete":
@@ -302,13 +307,32 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as error:
             self.respond(500, {"error": "Could not save reading history: " + str(error)})
 
+    def preferences_write(self):
+        try:
+            size = int(self.headers.get("Content-Length", "0"))
+            if not 0 < size <= 4096:
+                raise ValueError("Preferences request is too large or empty.")
+            value = json.loads(self.rfile.read(size))
+            if not isinstance(value, dict) or not isinstance(value.get("save_history"), bool):
+                raise ValueError("save_history must be true or false.")
+            self.server.save_history = value["save_history"]
+            if self.server.settings_file:
+                update_preferences({"save_history": self.server.save_history}, self.server.settings_file)
+            self.respond(200, {"save_history": self.server.save_history})
+        except (ValueError, TypeError) as error:
+            self.respond(400, {"error": str(error)})
+        except OSError as error:
+            self.respond(500, {"error": "Could not save preferences: " + str(error)})
 
-def make_server(token, port=8766, engine=None, history=None):
+
+def make_server(token, port=8766, engine=None, history=None, save_history=True, settings_file=None):
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     server.daemon_threads = True
     server.token = token
     server.engine = engine or OcrEngine()
     server.history = history or ReadingHistory(data_dir() / "reading-history.sqlite3")
+    server.save_history = bool(save_history)
+    server.settings_file = Path(settings_file) if settings_file else None
     server.monitor = LoadMonitor()
     return server
 
@@ -327,7 +351,7 @@ def serve(args):
     engine = OcrEngine(lambda: load_mokuro(force_cpu=args.force_cpu or not settings["use_gpu"],
                                          ocr_batch_size=args.ocr_batch_size))
     history = ReadingHistory(args.history_file or data_dir() / "reading-history.sqlite3")
-    server = make_server(token, args.port, engine, history)
+    server = make_server(token, args.port, engine, history, settings["save_history"], args.settings_file)
     print(f"Mokuro browser server: http://127.0.0.1:{args.port}; loading models now", flush=True)
     try:
         server.serve_forever()

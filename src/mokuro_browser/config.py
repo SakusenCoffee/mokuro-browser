@@ -12,9 +12,22 @@ def preferences(path=None):
     path = Path(path) if path else config_dir() / "preferences.json"
     try:
         saved = json.loads(path.read_text(encoding="utf-8"))
-        return {"use_gpu": saved.get("use_gpu", True) is not False}
+        return {"use_gpu": saved.get("use_gpu", True) is not False,
+                "save_history": saved.get("save_history", True) is not False}
     except (OSError, ValueError, AttributeError):
-        return {"use_gpu": True}
+        return {"use_gpu": True, "save_history": True}
+
+def update_preferences(values, path=None):
+    path = Path(path) if path else config_dir() / "preferences.json"
+    try:
+        saved = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(saved, dict):
+            saved = {}
+    except (OSError, ValueError):
+        saved = {}
+    saved.update(values)
+    atomic_write(path, json.dumps(saved, indent=2))
+    return preferences(path)
 
 def state_override(folder):
     base = os.environ.get("MOKURO_BROWSER_HOME")

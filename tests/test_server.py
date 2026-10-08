@@ -139,6 +139,18 @@ class ServerTests(unittest.TestCase):
         self.assertFalse(self.request("/history", json.dumps(value).encode())[1]["saved"])
         self.assertEqual(self.request("/history")[1]["totals"]["characters"], 0)
 
+    def test_history_saving_can_be_disabled_without_disabling_history_edits(self):
+        page = {"page_id": "9" * 64, "source_key": "disabled-page", "lines": ["保存しない"]}
+        try:
+            code, setting, _ = self.request("/preferences", b'{"save_history":false}')
+            self.assertEqual((code, setting), (200, {"save_history": False}))
+            self.assertFalse(self.request("/health")[1]["save_history"])
+            code, result, _ = self.request("/history", json.dumps(page).encode())
+            self.assertEqual((code, result), (200, {"saved": False, "disabled": True}))
+            self.assertNotIn(page["page_id"], {item["id"] for item in self.request("/history")[1]["pages"]})
+        finally:
+            self.request("/preferences", b'{"save_history":true}')
+
     def test_history_bulk_delete_requires_auth_and_valid_selection(self):
         for page_id in ("d" * 64, "e" * 64):
             value = {"page_id": page_id, "source_key": page_id, "lines": ["猫"]}

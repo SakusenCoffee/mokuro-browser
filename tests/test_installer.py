@@ -27,6 +27,20 @@ class InstallerTests(unittest.TestCase):
             self.assertFalse(json.loads((root / "preferences.json").read_text())["use_gpu"])
             launcher.set_gpu(record, True)
             self.assertTrue(launcher.use_gpu(record))
+
+    def test_history_preference_survives_reopening_and_defaults_to_enabled(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            token = root / "token"
+            host = root / "native-host"
+            (root / "host-config.json").write_text(json.dumps({"token_file": str(token),
+                                                                "settings_file": str(root / "preferences.json")}))
+            record = {"native_host": str(host)}
+            self.assertTrue(launcher.save_history(record))
+            launcher.set_save_history(record, False)
+            self.assertFalse(launcher.save_history(record))
+            launcher.set_save_history(record, True)
+            self.assertTrue(launcher.save_history(record))
     def test_previous_install_can_still_stop_its_server_during_upgrade(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "install"

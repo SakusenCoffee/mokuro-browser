@@ -88,8 +88,10 @@ def gui(args):
     notebook.pack(fill="both", expand=True, padx=12, pady=12)
     frame = ttk.Frame(notebook, padding=20)
     history_frame = ttk.Frame(notebook, padding=20)
+    logs_frame = ttk.Frame(notebook, padding=20)
     notebook.add(frame, text="Server")
     notebook.add(history_frame, text="Reading history")
+    notebook.add(logs_frame, text="Logs")
     ttk.Label(frame, text="Mokuro Browser", style="Title.TLabel").pack(anchor="w")
     ttk.Label(frame, text="Your private manga OCR control room. The server runs while this window is open.", style="Subtle.TLabel").pack(anchor="w", pady=(4, 16))
     reuse = tk.BooleanVar(value=not args.fresh)
@@ -100,6 +102,13 @@ def gui(args):
     gpu_toggle.pack(anchor="w", pady=(8, 0))
     gpu_toggle.configure(state="disabled")
     ttk.Label(frame, text="Turning this off uses CPU. Changing it restarts the server and reloads the models.", style="Subtle.TLabel").pack(anchor="w")
+    history_enabled = tk.BooleanVar(value=True)
+    history_toggles = []
+    server_history_toggle = ttk.Checkbutton(frame, text="Save scanned text to reading history",
+                                            variable=history_enabled, command=lambda: change_history_setting())
+    server_history_toggle.pack(anchor="w", pady=(10, 0))
+    server_history_toggle.configure(state="disabled")
+    history_toggles.append(server_history_toggle)
     server_status = tk.StringVar(value="Checking installation…")
     ttk.Label(frame, textvariable=server_status, font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(14, 4))
     load_status = tk.StringVar(value="System load · CPU —   GPU —")
@@ -116,8 +125,8 @@ def gui(args):
     ttk.Button(code_row, text="Copy", command=copy_code).pack(side="left")
     buttons = ttk.Frame(frame)
     buttons.pack(fill="x", pady=(8, 12))
-    ttk.Label(frame, text="Activity logs", font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(2, 5))
-    log_tabs = ttk.Notebook(frame)
+    ttk.Label(logs_frame, text="Activity logs", font=("Segoe UI", 18)).pack(anchor="w", pady=(0, 10))
+    log_tabs = ttk.Notebook(logs_frame)
     log_tabs.pack(fill="both", expand=True)
     setup_log_frame = ttk.Frame(log_tabs, padding=1)
     server_log_frame = ttk.Frame(log_tabs, padding=1)
@@ -130,7 +139,7 @@ def gui(args):
     server_output = ScrolledText(server_log_frame, height=12, wrap="word", state="disabled", bg="#121d1b", fg="#dbe9e4",
                                  insertbackground="#e8f1ee", relief="flat", padx=12, pady=10)
     server_output.pack(fill="both", expand=True)
-    actions = ttk.Frame(frame)
+    actions = ttk.Frame(logs_frame)
     actions.pack(fill="x", pady=(10, 0))
     messages = queue.Queue()
     running = False
@@ -141,6 +150,7 @@ def gui(args):
     installed_record = None
     server_active = False
     dashboard_pending = False
+    history_setting_pending = False
     history_pending = False
     history_offset = 0
     history_page_size = 200
@@ -151,8 +161,11 @@ def gui(args):
     ttk.Label(history_frame, text="Reading history", font=("", 20)).grid(row=0, column=0, sticky="w")
     history_totals = tk.StringVar(value="Characters 0     Kanji 0     Hiragana 0     Katakana 0")
     ttk.Label(history_frame, textvariable=history_totals, font=("", 13)).grid(row=1, column=0, sticky="w", pady=(12, 4))
-    history_description = ttk.Label(history_frame, text="One entry per manga page, with all its text editable together. Spaces and punctuation are excluded from counts.", wraplength=800)
-    history_description.grid(row=2, column=0, sticky="w", pady=(0, 12))
+    history_toggle = ttk.Checkbutton(history_frame, text="Save scanned text to reading history",
+                                     variable=history_enabled, command=lambda: change_history_setting())
+    history_toggle.grid(row=2, column=0, sticky="w", pady=(2, 10))
+    history_toggle.configure(state="disabled")
+    history_toggles.append(history_toggle)
     table_frame = ttk.Frame(history_frame)
     table_frame.grid(row=3, column=0, sticky="nsew")
     columns = ("source", "text", "characters", "kanji", "hiragana", "katakana")
@@ -178,8 +191,7 @@ def gui(args):
     history_note = tk.StringVar(value="Open the server to view your saved reading history.")
     history_note_label = ttk.Label(history_frame, textvariable=history_note, wraplength=800)
     history_note_label.grid(row=5, column=0, sticky="w", pady=(0, 8))
-    history_frame.bind("<Configure>", lambda event: [label.configure(wraplength=max(300, event.width - 40))
-                       for label in (history_description, history_note_label)])
+    history_frame.bind("<Configure>", lambda event: history_note_label.configure(wraplength=max(300, event.width - 40)))
     ttk.Label(history_frame, text="Edit all text on the selected page:").grid(row=6, column=0, sticky="w")
     page_editor = ScrolledText(history_frame, height=6, wrap="word", state="disabled")
     page_editor.grid(row=7, column=0, sticky="nsew", pady=(4, 8))
@@ -310,6 +322,31 @@ def gui(args):
             return f"{value:.0f}%" if isinstance(value, (int, float)) else "unavailable"
         load_status.set(f"System load · CPU {percent(usage.get('cpu'))}   GPU {percent(usage.get('gpu'))}" if active
                         else "System load · CPU —   GPU —")
+        if active and not history_setting_pending and isinstance(health.get("save_history"), bool):
+            history_enabled.set(health["save_history"])
+
+    def history_toggle_state(state):
+        for toggle in history_toggles:
+            toggle.configure(state=state)
+
+    def change_history_setting():
+        nonlocal history_setting_pending
+        if history_setting_pending or not installed_record:
+            return
+        enabled = history_enabled.get()
+        history_setting_pending = True
+        history_toggle_state("disabled")
+        record, active = installed_record.copy(), server_active
+        def work():
+            try:
+                if active:
+                    launcher.request(record, "/preferences", {"save_history": enabled})
+                else:
+                    launcher.set_save_history(record, enabled)
+                messages.put(("history_setting", (enabled, None)))
+            except Exception as error:
+                messages.put(("history_setting", (not enabled, str(error))))
+        threading.Thread(target=work, daemon=True).start()
 
     def change_gpu():
         nonlocal server_pending, server_generation
@@ -368,6 +405,8 @@ def gui(args):
             install_button.configure(text="Install / update", state="normal")
         code.set(launcher.pairing_code(record))
         gpu_enabled.set(launcher.use_gpu(record))
+        history_enabled.set(launcher.save_history(record))
+        history_toggle_state("normal")
         gpu_toggle.configure(state="normal")
         server_status.set("Server is off")
     def server_action(action):
@@ -396,8 +435,8 @@ def gui(args):
         running = True
         server_generation += 1
         reader_state()
-        progress.pack(fill="x", before=log_tabs, pady=(0, 8))
-        progress_label.pack(fill="x", before=progress, pady=(0, 4))
+        progress_label.pack(fill="x", pady=(4, 4))
+        progress.pack(fill="x", pady=(0, 8))
         progress.configure(mode="indeterminate" if removing else "determinate", value=0)
         progress_text.set("Removing managed installation…" if removing else "Preparing installation…")
         if removing:
@@ -406,6 +445,7 @@ def gui(args):
         remove_button.configure(state="disabled")
         server_button.configure(state="disabled")
         gpu_toggle.configure(state="disabled")
+        history_toggle_state("disabled")
         args.uninstall, args.fresh = removing, not reuse.get()
         def work():
             try:
@@ -461,7 +501,7 @@ def gui(args):
                 messages.put(("update_check_error", str(error)))
         threading.Thread(target=work, daemon=True).start()
     def poll():
-        nonlocal running, owned_server, server_pending, installed_record, history_pending, history_offset, history_total_pages, observe_pending, update_info, dashboard_pending
+        nonlocal running, owned_server, server_pending, installed_record, history_pending, history_offset, history_total_pages, observe_pending, update_info, dashboard_pending, history_setting_pending
         while not messages.empty():
             kind, value = messages.get_nowait()
             if kind == "log":
@@ -471,6 +511,14 @@ def gui(args):
                 percent, message = value
                 progress.configure(value=percent)
                 progress_text.set(f"{percent:.0f}% · {message} (installation stages)")
+                continue
+            if kind == "history_setting":
+                history_setting_pending = False
+                enabled, error = value
+                history_enabled.set(enabled)
+                history_toggle_state("normal" if installed_record else "disabled")
+                if error:
+                    write("Reading history setting failed: " + error)
                 continue
             if kind == "update_available":
                 update_info = value
@@ -585,6 +633,7 @@ def gui(args):
                 continue
             running = False
             reader_state()
+            history_toggle_state("normal" if installed_record else "disabled")
             progress.stop()
             install_button.configure(state="normal")
             remove_button.configure(state="normal")
@@ -609,6 +658,7 @@ def gui(args):
                 server_button.configure(state="disabled")
                 reader_state(False)
                 gpu_toggle.configure(state="disabled")
+                history_toggle_state("disabled")
                 install_button.configure(text="Install / update", state="normal")
                 write("Uninstall complete.")
             else:

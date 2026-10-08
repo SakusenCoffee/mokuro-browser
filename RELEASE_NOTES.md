@@ -1,5 +1,5 @@
-- Fixed AppImage update detection after v0.1.12.
-- Always shows launcher update status.
-- Prevents reinstalling an already-current OCR environment.
+- Added reading-history saving controls to both launcher pages.
+- Moved setup activity and server output to a Logs tab.
+- Simplified the reading-history page.
 
-Download this launcher once. Future launcher updates appear in the app.
+Existing reading history is preserved when saving is disabled.
