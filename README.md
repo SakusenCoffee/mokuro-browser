@@ -259,18 +259,24 @@ Linux and NVIDIA GPUs with NVML can report GPU load; the popup hides meters
 when their counters are unavailable. Models begin loading as soon as the server starts, and both
 interfaces show when they are ready.
 
-The extension saves recognized lines to a local reading archive. The launcher's
-**Reading history** tab shows total characters, Japanese words, kanji, and kana,
-with spaces and punctuation excluded from counts. Word counts use the Japanese
-tokenizer already included with Manga OCR. Totals measure scanned text; they
+The extension saves recognized text to a local reading archive, with one entry
+per manga page. The launcher's **Reading history** tab shows total characters,
+kanji, hiragana, and katakana, with spaces and punctuation excluded from counts.
+Totals measure scanned text; they
 cannot determine whether you actually read every line.
 
-Select a saved line to edit it or delete it. Totals update after each change.
+Select a page to edit all its text together, including multiple lines. Select
+multiple pages with Ctrl/Command or Shift, then use **Delete selected pages** or
+the Delete key in the page table. Deletion asks for confirmation. Totals update after each change.
 Repeated scans and restored overlays do not count the same page again, and a
-rescan cannot overwrite edits or restore deleted lines. Repeated dialogue on
+rescan cannot overwrite edits or restore deleted pages. Repeated dialogue on
 different pages is counted normally. Unsent pages remain in the extension until
 the local app can save them. The archive stays on your computer across browser
 restarts, app updates, and managed app uninstalls.
+
+Updating from the old line-based archive automatically groups its remaining
+text by page, preserving edits and deletions. Before converting, it saves a
+one-time `reading-history.before-page-history.sqlite3` backup beside the archive.
 
 Update the launcher along with the extension: old servers cannot accept reading
 history or report model readiness and utilization. Queued reading history retries
@@ -278,9 +284,11 @@ every minute and when you open the popup. The pairing code stays saved and fills
 the popup's password field when it opens. After updating an unpacked extension,
 reload it in the browser's extensions page and refresh manga tabs for new overlays.
 
-The launcher also has **Open live reader**. It opens a local dashboard that shows
-newly scanned lines as they arrive, with your character, word, kanji, and kana
-totals on the left. The page is served only on your computer; its dashboard
+Both launcher tabs have **Open live reader**. It opens a local dashboard that shows
+newly scanned pages as they arrive, with character, kanji, hiragana, and katakana
+totals on the left. Edits and deletions are reflected live. If the system cannot
+open your browser, the launcher offers to copy the local reader link instead.
+The page is served only on your computer; its dashboard
 credential stays in the URL fragment and is never sent in the request for the
 page or written to server logs. The launcher's bottom **Activity logs** area has
 separate setup and server log tabs.

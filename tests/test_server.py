@@ -127,13 +127,29 @@ class ServerTests(unittest.TestCase):
         value = {"page_id": "c" * 64, "source_key": "test-page", "lines": ["日本語。", "かな！"], "title": "Test"}
         self.assertEqual(self.request("/history", json.dumps(value).encode())[0], 200)
         _, saved, _ = self.request("/history")
-        line_id = saved["lines"][0]["id"]
+        page_id = saved["pages"][0]["id"]
+        self.assertEqual(saved["pages"][0]["text"], "日本語。\nかな！")
         self.assertEqual(saved["totals"]["characters"], 5)
-        self.assertEqual(self.request(f"/history/{line_id}", json.dumps({"action": "edit", "text": "猫！"}).encode())[0], 200)
-        self.assertEqual(self.request("/history")[1]["totals"]["characters"], 4)
-        self.assertEqual(self.request(f"/history/{line_id}", b'{"action":"delete"}')[0], 200)
+        self.assertEqual(self.request(f"/history/{page_id}", json.dumps({"action": "edit", "text": "猫！\nカナ"}).encode())[0], 200)
+        totals = self.request("/history")[1]["totals"]
+        self.assertEqual(totals["characters"], 3)
+        self.assertEqual(totals["katakana"], 2)
+        self.assertNotIn("words", totals)
+        self.assertEqual(self.request(f"/history/{page_id}", b'{"action":"delete"}')[0], 200)
         self.assertFalse(self.request("/history", json.dumps(value).encode())[1]["saved"])
-        self.assertEqual(self.request("/history")[1]["totals"]["characters"], 3)
+        self.assertEqual(self.request("/history")[1]["totals"]["characters"], 0)
+
+    def test_history_bulk_delete_requires_auth_and_valid_selection(self):
+        for page_id in ("d" * 64, "e" * 64):
+            value = {"page_id": page_id, "source_key": page_id, "lines": ["猫"]}
+            self.assertEqual(self.request("/history", json.dumps(value).encode())[0], 200)
+        value = json.dumps({"page_ids": ["d" * 64, "e" * 64]}).encode()
+        self.assertEqual(self.request("/history/delete", value, {"Authorization": ""})[0], 401)
+        self.assertEqual(self.request("/history/delete", b'{"page_ids":[]}')[0], 400)
+        self.assertEqual(self.request("/history/delete", json.dumps({"page_ids": ["d" * 64, "f" * 64]}).encode())[0], 404)
+        code, deleted, _ = self.request("/history/delete", value)
+        self.assertEqual(code, 200)
+        self.assertEqual(deleted["pages"], 2)
 
     def test_website_origin_is_rejected_even_with_token(self):
         code, _, headers = self.request("/health", headers={"Origin": "https://example.com"})
@@ -155,6 +171,10 @@ class ServerTests(unittest.TestCase):
             self.assertEqual(response.status, 200)
         self.assertIn("Live feed", page)
         self.assertIn("location.hash", page)
+        self.assertIn('id="hiragana"', page)
+        self.assertIn('id="katakana"', page)
+        self.assertNotIn('id="words"', page)
+        self.assertIn("JSON.stringify(history.pages)", page)
         self.assertNotIn(self.http.token, page)
 
     def test_invalid_host_is_rejected(self):

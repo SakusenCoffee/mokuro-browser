@@ -50,7 +50,7 @@ def open_folder(folder):
 
 def gui(args):
     import tkinter as tk
-    from tkinter import ttk
+    from tkinter import messagebox, ttk
     from tkinter.scrolledtext import ScrolledText
     if os.name == "nt":
         import ctypes
@@ -139,21 +139,26 @@ def gui(args):
     observe_pending = False
     server_generation = 0
     installed_record = None
+    server_active = False
+    dashboard_pending = False
     history_pending = False
     history_offset = 0
     history_page_size = 200
-    history_total_lines = 0
-    ttk.Label(history_frame, text="Reading history", font=("", 20)).pack(anchor="w")
-    history_totals = tk.StringVar(value="Characters 0     Words 0     Kanji 0     Kana 0")
-    ttk.Label(history_frame, textvariable=history_totals, font=("", 13)).pack(anchor="w", pady=(12, 4))
-    ttk.Label(history_frame, text="Recognized text, counted once per page. Spaces and punctuation are excluded; words use Japanese segmentation.",
-              wraplength=800).pack(anchor="w", pady=(0, 12))
+    history_total_pages = 0
+    history_frame.columnconfigure(0, weight=1)
+    history_frame.rowconfigure(3, weight=3, minsize=100)
+    history_frame.rowconfigure(7, weight=2, minsize=85)
+    ttk.Label(history_frame, text="Reading history", font=("", 20)).grid(row=0, column=0, sticky="w")
+    history_totals = tk.StringVar(value="Characters 0     Kanji 0     Hiragana 0     Katakana 0")
+    ttk.Label(history_frame, textvariable=history_totals, font=("", 13)).grid(row=1, column=0, sticky="w", pady=(12, 4))
+    history_description = ttk.Label(history_frame, text="One entry per manga page, with all its text editable together. Spaces and punctuation are excluded from counts.", wraplength=800)
+    history_description.grid(row=2, column=0, sticky="w", pady=(0, 12))
     table_frame = ttk.Frame(history_frame)
-    table_frame.pack(fill="both", expand=True)
-    columns = ("text", "characters", "words", "kanji", "kana", "source")
-    history_table = ttk.Treeview(table_frame, columns=columns, show="headings", selectmode="browse")
-    for column, label, width in (("text", "Saved text", 320), ("characters", "Chars", 55), ("words", "Words", 55),
-                                 ("kanji", "Kanji", 55), ("kana", "Kana", 55), ("source", "Page", 170)):
+    table_frame.grid(row=3, column=0, sticky="nsew")
+    columns = ("source", "text", "characters", "kanji", "hiragana", "katakana")
+    history_table = ttk.Treeview(table_frame, columns=columns, show="headings", selectmode="extended", height=5)
+    for column, label, width in (("source", "Page", 170), ("text", "Page text preview", 300), ("characters", "Chars", 55),
+                                 ("kanji", "Kanji", 55), ("hiragana", "Hiragana", 85), ("katakana", "Katakana", 85)):
         history_table.heading(column, text=label)
         history_table.column(column, width=width, minwidth=45, anchor="w" if column in ("text", "source") else "center")
     history_scroll = ttk.Scrollbar(table_frame, orient="vertical", command=history_table.yview)
@@ -161,43 +166,55 @@ def gui(args):
     history_table.pack(side="left", fill="both", expand=True)
     history_scroll.pack(side="right", fill="y")
     page_controls = ttk.Frame(history_frame)
-    page_controls.pack(fill="x", pady=8)
-    previous_history = ttk.Button(page_controls, text="Newer lines", command=lambda: history_page(-1))
+    page_controls.grid(row=4, column=0, sticky="ew", pady=8)
+    previous_history = ttk.Button(page_controls, text="Newer pages", command=lambda: history_page(-1))
     previous_history.pack(side="left")
-    next_history = ttk.Button(page_controls, text="Older lines", command=lambda: history_page(1))
+    next_history = ttk.Button(page_controls, text="Older pages", command=lambda: history_page(1))
     next_history.pack(side="left", padx=8)
     ttk.Button(page_controls, text="Refresh", command=lambda: refresh_history()).pack(side="right")
+    history_dashboard_button = ttk.Button(page_controls, text="Open live reader", command=lambda: open_reader())
+    history_dashboard_button.pack(side="right", padx=8)
+    history_dashboard_button.configure(state="disabled")
     history_note = tk.StringVar(value="Open the server to view your saved reading history.")
-    ttk.Label(history_frame, textvariable=history_note, wraplength=800).pack(anchor="w", pady=(0, 8))
-    ttk.Label(history_frame, text="Edit selected line:").pack(anchor="w")
-    line_editor = ScrolledText(history_frame, height=4, wrap="word")
-    line_editor.pack(fill="x", pady=(4, 8))
+    history_note_label = ttk.Label(history_frame, textvariable=history_note, wraplength=800)
+    history_note_label.grid(row=5, column=0, sticky="w", pady=(0, 8))
+    history_frame.bind("<Configure>", lambda event: [label.configure(wraplength=max(300, event.width - 40))
+                       for label in (history_description, history_note_label)])
+    ttk.Label(history_frame, text="Edit all text on the selected page:").grid(row=6, column=0, sticky="w")
+    page_editor = ScrolledText(history_frame, height=6, wrap="word", state="disabled")
+    page_editor.grid(row=7, column=0, sticky="nsew", pady=(4, 8))
     history_actions = ttk.Frame(history_frame)
-    history_actions.pack(fill="x")
-    save_line = ttk.Button(history_actions, text="Save changes", command=lambda: change_line("edit"))
-    save_line.pack(side="left")
-    delete_line = ttk.Button(history_actions, text="Delete selected line", command=lambda: change_line("delete"))
-    delete_line.pack(side="left", padx=8)
-    save_line.configure(state="disabled")
-    delete_line.configure(state="disabled")
+    history_actions.grid(row=8, column=0, sticky="ew")
+    save_page = ttk.Button(history_actions, text="Save changes", command=lambda: change_page("edit"))
+    save_page.pack(side="left")
+    delete_pages = ttk.Button(history_actions, text="Delete selected pages", command=lambda: change_page("delete"))
+    delete_pages.pack(side="left", padx=8)
+    save_page.configure(state="disabled")
+    delete_pages.configure(state="disabled")
     history_rows = {}
     editing_id = None
 
-    def select_line(event=None):
+    def select_page(event=None):
         nonlocal editing_id
         selected = history_table.selection()
-        line_id = selected[0] if selected else None
-        if line_id == editing_id:
-            return
-        editing_id = line_id
-        line_editor.delete("1.0", "end")
-        if line_id and line_id in history_rows:
-            line_editor.insert("1.0", history_rows[line_id]["text"])
-        state = "normal" if line_id and not history_pending else "disabled"
-        save_line.configure(state=state)
-        delete_line.configure(state=state)
+        page_id = selected[0] if len(selected) == 1 else None
+        if page_id != editing_id:
+            editing_id = page_id
+            page_editor.configure(state="normal")
+            page_editor.delete("1.0", "end")
+            if page_id and page_id in history_rows:
+                page_editor.insert("1.0", history_rows[page_id]["text"])
+        page_editor.configure(state="normal" if page_id else "disabled")
+        save_page.configure(state="normal" if page_id and not history_pending else "disabled")
+        delete_pages.configure(state="normal" if selected and not history_pending else "disabled")
 
-    history_table.bind("<<TreeviewSelect>>", select_line)
+    history_table.bind("<<TreeviewSelect>>", select_page)
+    def delete_key(event):
+        change_page("delete")
+        return "break"
+    history_table.bind("<Delete>", delete_key)
+    if sys.platform == "darwin":
+        history_table.bind("<BackSpace>", delete_key)
 
     def refresh_history():
         nonlocal history_pending
@@ -219,28 +236,59 @@ def gui(args):
             history_offset = max(0, history_offset + direction * history_page_size)
             refresh_history()
 
-    def change_line(action):
+    def change_page(action):
         nonlocal history_pending
         selected = history_table.selection()
         if history_pending or not installed_record or not selected:
             return
-        line_id = selected[0]
-        value = {"action": action}
         if action == "edit":
-            value["text"] = line_editor.get("1.0", "end-1c")
-            if not value["text"].strip():
-                history_note.set("Enter some text, or use Delete selected line.")
+            if len(selected) != 1:
                 return
+            path = f"/history/{selected[0]}"
+            value = {"action": "edit", "text": page_editor.get("1.0", "end-1c")}
+            if not value["text"].strip():
+                history_note.set("Enter some text, or use Delete selected pages.")
+                return
+        else:
+            count = len(selected)
+            if not messagebox.askyesno("Delete saved pages?",
+                    f"Delete {count} saved manga page{'s' if count != 1 else ''} and all their text from reading history?\n"
+                    "Deleted pages will not be counted again if rescanned.", parent=root):
+                return
+            path, value = "/history/delete", {"page_ids": list(selected)}
         history_pending = True
-        save_line.configure(state="disabled")
-        delete_line.configure(state="disabled")
+        save_page.configure(state="disabled")
+        delete_pages.configure(state="disabled")
         record = installed_record.copy()
         def work():
             try:
-                launcher.request(record, f"/history/{line_id}", value)
+                launcher.request(record, path, value)
                 messages.put(("history_changed", action))
             except Exception as error:
-                messages.put(("history_error", "Could not change the saved line: " + str(error)))
+                messages.put(("history_error", "Could not change the saved page: " + str(error)))
+        threading.Thread(target=work, daemon=True).start()
+
+    def reader_state(active=None):
+        nonlocal server_active
+        if active is not None:
+            server_active = active
+        state = "normal" if installed_record and server_active and not (running or server_pending or dashboard_pending) else "disabled"
+        dashboard_button.configure(state=state)
+        history_dashboard_button.configure(state=state)
+
+    def open_reader():
+        nonlocal dashboard_pending
+        if not installed_record or dashboard_pending:
+            return
+        dashboard_pending = True
+        reader_state()
+        record = installed_record.copy()
+        def work():
+            try:
+                launcher.open_dashboard(record)
+                messages.put(("dashboard_opened", None))
+            except Exception as error:
+                messages.put(("dashboard_error", str(error)))
         threading.Thread(target=work, daemon=True).start()
 
     def show_server(result):
@@ -269,6 +317,7 @@ def gui(args):
             return
         server_pending = True
         server_generation += 1
+        reader_state()
         gpu_toggle.configure(state="disabled")
         server_button.configure(state="disabled")
         server_status.set("Applying GPU setting and reloading models…")
@@ -323,6 +372,7 @@ def gui(args):
             return
         server_pending = True
         server_generation += 1
+        reader_state()
         server_button.configure(state="disabled")
         gpu_toggle.configure(state="disabled")
         server_status.set("Starting server…" if action == "start" else "Stopping server…")
@@ -341,6 +391,7 @@ def gui(args):
             return
         running = True
         server_generation += 1
+        reader_state()
         progress.pack(fill="x", before=log_tabs, pady=(0, 8))
         progress_label.pack(fill="x", before=progress, pady=(0, 4))
         progress.configure(mode="indeterminate" if removing else "determinate", value=0)
@@ -370,7 +421,7 @@ def gui(args):
         "stop" if server_button.cget("text") == "Stop server" else "start"))
     server_button.pack(side="left", padx=10)
     server_button.configure(state="disabled")
-    dashboard_button = ttk.Button(buttons, text="Open live reader", command=lambda: launcher.open_dashboard(installed_record))
+    dashboard_button = ttk.Button(buttons, text="Open live reader", command=open_reader)
     dashboard_button.pack(side="right")
     dashboard_button.configure(state="disabled")
     update_info = None
@@ -408,7 +459,7 @@ def gui(args):
                 messages.put(("update_check_error", str(error)))
         threading.Thread(target=work, daemon=True).start()
     def poll():
-        nonlocal running, owned_server, server_pending, installed_record, history_pending, history_total_lines, observe_pending, update_info
+        nonlocal running, owned_server, server_pending, installed_record, history_pending, history_offset, history_total_pages, observe_pending, update_info, dashboard_pending
         while not messages.empty():
             kind, value = messages.get_nowait()
             if kind == "log":
@@ -436,6 +487,15 @@ def gui(args):
             if kind == "update_complete":
                 root.destroy()
                 return
+            if kind in ("dashboard_opened", "dashboard_error"):
+                dashboard_pending = False
+                reader_state()
+                if kind == "dashboard_error":
+                    if messagebox.askyesno("Could not open live reader", value +
+                            "\n\nCopy the local reader link so you can paste it into your browser?", parent=root):
+                        root.clipboard_clear()
+                        root.clipboard_append(launcher.dashboard_url(installed_record))
+                continue
             if kind == "server":
                 action, result, started_here = value
                 server_pending = False
@@ -447,7 +507,7 @@ def gui(args):
                 show_server(result)
                 server_button.configure(text="Stop server" if active else "Start server", state="normal")
                 gpu_toggle.configure(state="normal")
-                dashboard_button.configure(state="normal" if active else "disabled")
+                reader_state(active)
                 refresh_history()
                 continue
             if kind == "server_error":
@@ -455,6 +515,7 @@ def gui(args):
                 server_status.set("Server could not start")
                 server_button.configure(state="normal")
                 gpu_toggle.configure(state="normal")
+                reader_state()
                 write("Server error: " + value)
                 continue
             if kind == "observed":
@@ -466,44 +527,44 @@ def gui(args):
                         owned_server = False
                     show_server(result)
                     server_button.configure(text="Stop server" if active else "Start server", state="normal")
-                    dashboard_button.configure(state="normal" if active else "disabled")
+                    reader_state(active)
                 continue
             if kind == "history":
                 history_pending = False
-                history_total_lines = value["totals"]["lines"]
+                history_total_pages = value["totals"]["pages"]
+                if history_offset and history_offset >= history_total_pages:
+                    history_offset = max(0, ((history_total_pages - 1) // history_page_size) * history_page_size)
+                    refresh_history()
+                    continue
                 totals = value["totals"]
-                history_totals.set("     ".join(f"{name.title()} {totals[name]:,}" for name in ("characters", "words", "kanji", "kana")))
-                new_rows = {str(row["id"]): row for row in value["lines"]}
-                for line_id in history_table.get_children():
-                    if line_id not in new_rows:
-                        history_table.delete(line_id)
-                for position, (line_id, row) in enumerate(new_rows.items()):
-                    values = (row["text"], row["characters"], row["words"], row["kanji"], row["kana"], row["title"])
-                    if history_table.exists(line_id):
-                        history_table.item(line_id, values=values)
-                        history_table.move(line_id, "", position)
+                history_totals.set("     ".join(f"{name.title()} {totals[name]:,}" for name in ("characters", "kanji", "hiragana", "katakana")))
+                new_rows = {row["id"]: row for row in value["pages"]}
+                for page_id in history_table.get_children():
+                    if page_id not in new_rows:
+                        history_table.delete(page_id)
+                for position, (page_id, row) in enumerate(new_rows.items()):
+                    preview = " · ".join(row["text"].splitlines())[:500]
+                    values = (row["title"] or "Manga page", preview, row["characters"], row["kanji"], row["hiragana"], row["katakana"])
+                    if history_table.exists(page_id):
+                        history_table.item(page_id, values=values)
+                        history_table.move(page_id, "", position)
                     else:
-                        history_table.insert("", position, iid=line_id, values=values)
+                        history_table.insert("", position, iid=page_id, values=values)
                 history_rows.clear()
                 history_rows.update(new_rows)
                 previous_history.configure(state="normal" if history_offset else "disabled")
-                next_history.configure(state="normal" if history_offset + history_page_size < history_total_lines else "disabled")
-                history_note.set(f"{history_total_lines:,} saved lines across {totals['pages']:,} pages · totals update when you edit or delete a line.")
-                select_line()
-                if history_table.selection():
-                    save_line.configure(state="normal")
-                    delete_line.configure(state="normal")
+                next_history.configure(state="normal" if history_offset + history_page_size < history_total_pages else "disabled")
+                history_note.set(f"{history_total_pages:,} saved pages · Ctrl/⌘ or Shift selects multiple pages; Delete removes them.")
+                select_page()
                 continue
             if kind in ("history_changed", "history_error"):
                 history_pending = False
                 if kind == "history_changed":
-                    history_note.set("Changes saved." if value == "edit" else "Saved line deleted.")
+                    history_note.set("Changes saved." if value == "edit" else "Selected pages deleted.")
                     refresh_history()
                 else:
                     history_note.set(value)
-                    if history_table.selection():
-                        save_line.configure(state="normal")
-                        delete_line.configure(state="normal")
+                    select_page()
                 continue
             if kind == "closed":
                 root.destroy()
@@ -519,6 +580,7 @@ def gui(args):
                     root.destroy()
                 continue
             running = False
+            reader_state()
             progress.stop()
             install_button.configure(state="normal")
             remove_button.configure(state="normal")
@@ -536,7 +598,7 @@ def gui(args):
                 code.set("")
                 server_status.set("Not installed")
                 server_button.configure(state="disabled")
-                dashboard_button.configure(state="disabled")
+                reader_state(False)
                 gpu_toggle.configure(state="disabled")
                 write("Uninstall complete.")
             else:
@@ -545,8 +607,7 @@ def gui(args):
                 write("\nThe server starts now. Load the extension once, then it will recognize this server.")
                 write("Extension folder: " + value["extension"])
                 ttk.Button(actions, text="Open extension folder", command=lambda: open_folder(value["extension"])).pack(side="left", padx=8)
-                import webbrowser
-                ttk.Button(actions, text="Browser instructions", command=lambda: webbrowser.open("https://github.com/SakusenCoffee/mokuro-browser#install-the-browser-extension")).pack(side="left")
+                ttk.Button(actions, text="Browser instructions", command=lambda: launcher.open_url("https://github.com/SakusenCoffee/mokuro-browser#install-the-browser-extension")).pack(side="left")
                 server_action("start")
         root.after(100, poll)
     def refresh_server():

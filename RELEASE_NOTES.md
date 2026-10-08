@@ -1,9 +1,28 @@
-# v0.1.9 — Windows setup and browser fixes
+# v0.1.10 — Page-based reading history and live reader fixes
+
+## Reading history and live reader
+
+- Saves one entry per manga page. Select a page to edit all its recognized text
+  together in the larger editor; counts update after saving.
+- Deletes multiple selected pages with a button or the Delete key, with a
+  confirmation before deletion. Rescans do not restore deleted pages.
+- Removes word counts and separates hiragana from katakana in the launcher and
+  local live reader. No Japanese word tokenizer is loaded for history counts.
+- Converts existing history automatically, preserving edits and deletions, and
+  keeps a one-time SQLite backup beside the original archive.
+- Fixes browser opening from packaged launchers by using the operating system's
+  browser opener with a clean environment. Errors offer a copyable local link.
+- Adds **Open live reader** to Reading history as well as Server. The dashboard
+  groups text by page and updates after edits and deletions, not only new scans.
+
+Download and run the updated launcher for your OS, or use **Update launcher**.
+Let it update the installation and restart the server. Existing history and
+browser pairing are retained. No extension update is needed for these changes.
 
 ## Browser extension update: 1.5.4
 
 Use `mokuro-browser-extension-1.5.4.zip` for the latest browser fixes; it works
-with the v0.1.9 launchers below. It supersedes the 1.5.2 and 1.5.3 extension ZIPs.
+with these launchers. It supersedes the 1.5.2 and 1.5.3 extension ZIPs.
 
 - Normalizes all text areas to a shared page-wide font before the size slider
   takes effect. A narrow punctuation column no longer shrinks the whole bubble.
@@ -20,7 +39,7 @@ with the v0.1.9 launchers below. It supersedes the 1.5.2 and 1.5.3 extension ZIP
 Reload the extension and refresh manga tabs after updating. These display
 changes apply to cached OCR results too; rescanning is not required.
 
-## Desktop release
+## Previously included desktop fixes
 
 - Fresh Windows setup checks for the Visual C++ runtime required by PyTorch.
   If missing, it downloads Microsoft's installer, verifies its signature, and

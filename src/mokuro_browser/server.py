@@ -20,6 +20,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 from . import __version__
 from .config import pairing_token, data_dir, preferences
+from .dashboard import DASHBOARD
 from .history import ReadingHistory
 from .monitor import LoadMonitor
 MAX_BYTES = 32 * 1024 * 1024
@@ -27,8 +28,6 @@ MAX_PIXELS = 40_000_000
 Image.MAX_IMAGE_PIXELS = MAX_PIXELS
 
 
-DASHBOARD = """<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mokuro Browser · Live reading</title><style>
-:root{color-scheme:dark;font:15px/1.5 Inter,ui-sans-serif,system-ui,sans-serif;background:#121a1c;color:#e8f1ee}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at top left,#1c3935,#121a1c 46%)}main{display:grid;grid-template-columns:minmax(250px,340px) 1fr;min-height:100vh}.profile{padding:32px;border-right:1px solid #36534e;background:#172725cc;position:sticky;top:0;height:100vh}.eyebrow{color:#7ce0be;text-transform:uppercase;font-size:11px;letter-spacing:.13em;font-weight:700}.profile h1{font-size:26px;margin:7px 0 3px}.muted{color:#a5bbb5;margin:0}.status{margin:22px 0;padding:11px 13px;border:1px solid #4e7f70;border-radius:10px;background:#1e3832}.status.ready{box-shadow:0 0 18px #3ee69b36;border-color:#64e3a0}.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px}.stat{padding:13px;background:#213531;border:1px solid #35574f;border-radius:10px}.stat b{display:block;font-size:24px;color:#fff}.stat span{font-size:12px;color:#a8c0b9}.feed{padding:38px;max-width:1000px;width:100%;margin:0 auto}.feed h2{margin:0;font-size:28px}.feed>p{color:#a5bbb5;margin:5px 0 24px}.line{background:#1b2b28;border:1px solid #35534d;border-radius:12px;padding:16px 18px;margin:10px 0;animation:arrive .25s ease-out}.line p{font:20px/1.65 "Noto Sans JP","Meiryo",sans-serif;margin:0;color:#f4f8f6}.meta{font-size:12px;color:#9db5ae;margin-top:8px}@keyframes arrive{from{opacity:0;transform:translateY(8px)}}.empty{color:#a9c0b9;border:1px dashed #49675f;border-radius:12px;padding:28px;text-align:center}@media(max-width:700px){main{display:block}.profile{position:static;height:auto;border-right:0;border-bottom:1px solid #36534e}.feed{padding:24px}.stats{grid-template-columns:repeat(4,1fr)}.stat{padding:9px}.stat b{font-size:18px}}</style><main><aside class="profile"><div class="eyebrow">Mokuro Browser</div><h1>Reading profile</h1><p class="muted">Live, local OCR reading log</p><div id="status" class="status">Connecting to local server…</div><div class="stats"><div class="stat"><b id="characters">0</b><span>Characters</span></div><div class="stat"><b id="words">0</b><span>Words</span></div><div class="stat"><b id="kanji">0</b><span>Kanji</span></div><div class="stat"><b id="kana">0</b><span>Kana</span></div></div></aside><section class="feed"><div class="eyebrow">Live feed</div><h2>Scanned text</h2><p>New OCR text appears here while you read. It stays on this computer.</p><div id="lines" class="empty">Waiting for scanned manga text…</div></section></main><script>const token=location.hash.slice(1), $=id=>document.getElementById(id);let seen='';async function refresh(){try{const r=await fetch('/history?limit=100',{headers:{Authorization:'Bearer '+token}});if(!r.ok)throw Error();const d=await r.json(),t=d.totals;for(const n of ['characters','words','kanji','kana'])$(n).textContent=(t[n]||0).toLocaleString();const h=await fetch('/health',{headers:{Authorization:'Bearer '+token}}),health=await h.json(),s=$('status');s.textContent=health.model==='ready'?'● Server ready · '+(health.device||'CPU'):health.model==='loading'?'● Loading OCR models…':'● Server is unavailable';s.className='status '+(health.model==='ready'?'ready':'');const key=d.lines.map(x=>x.id).join(',');if(key!==seen){seen=key;const box=$('lines');box.className='';box.innerHTML=d.lines.length?d.lines.map(x=>'<article class="line"><p></p><div class="meta"></div></article>').join(''):'<div class="empty">Waiting for scanned manga text…</div>';[...box.querySelectorAll('article')].forEach((node,i)=>{const x=d.lines[i];node.querySelector('p').textContent=x.text;node.querySelector('.meta').textContent=`${x.title||'Manga page'} · ${x.characters} characters`})}}catch(e){$('status').textContent='● Cannot reach the local server';$('status').className='status'}}refresh();setInterval(refresh,1000)</script>"""
 
 
 def normalize_image(data):
@@ -243,7 +242,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized():
             return
         route = urlsplit(self.path)
-        if route.path == "/history" or re.fullmatch(r"/history/\d+", route.path):
+        if route.path in ("/history", "/history/delete") or re.fullmatch(r"/history/[a-f0-9]{64}", route.path):
             self.history_write(route.path)
             return
         if route.path == "/shutdown":
@@ -287,10 +286,12 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/history":
                 result = self.server.history.add(value.get("page_id"), value.get("source_key"),
                                                  value.get("lines"), value.get("title", ""))
+            elif path == "/history/delete":
+                result = self.server.history.delete_pages(value.get("page_ids"))
             elif value.get("action") == "delete":
-                result = self.server.history.delete(int(path.rsplit("/", 1)[1]))
+                result = self.server.history.delete(path.rsplit("/", 1)[1])
             elif value.get("action") == "edit":
-                result = self.server.history.edit(int(path.rsplit("/", 1)[1]), value.get("text"))
+                result = self.server.history.edit(path.rsplit("/", 1)[1], value.get("text"))
             else:
                 raise ValueError("Unknown reading history action.")
             self.respond(200, result)

@@ -1,6 +1,6 @@
 """Local reading history; page aliases and tombstones prevent repeat counts."""
 import hashlib
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 import json
 from pathlib import Path
 import sqlite3
@@ -15,7 +15,7 @@ def readable(char):
 
 def character_counts(text):
     text = unicodedata.normalize("NFKC", text)
-    counts = {"characters": 0, "kanji": 0, "kana": 0}
+    counts = {"characters": 0, "kanji": 0, "hiragana": 0, "katakana": 0}
     for char in text:
         if not readable(char):
             continue
@@ -24,8 +24,12 @@ def character_counts(text):
         if (0x3400 <= number <= 0x4DBF or 0x4E00 <= number <= 0x9FFF
                 or 0xF900 <= number <= 0xFAFF or 0x20000 <= number <= 0x323AF or char == "々"):
             counts["kanji"] += 1
-        elif 0x3040 <= number <= 0x30FF or 0x31F0 <= number <= 0x31FF or 0x1B000 <= number <= 0x1B16F:
-            counts["kana"] += 1
+        else:
+            name = unicodedata.name(char, "")
+            if name.startswith(("HIRAGANA ", "HENTAIGANA ")):
+                counts["hiragana"] += 1
+            elif name.startswith("KATAKANA"):
+                counts["katakana"] += 1
     return counts
 
 
@@ -34,18 +38,40 @@ class ReadingHistory:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
-        self.tagger = None
         with self.connect() as db:
             db.executescript("""
-                CREATE TABLE IF NOT EXISTS pages (id TEXT PRIMARY KEY, title TEXT NOT NULL, scanned_at REAL NOT NULL);
-                CREATE TABLE IF NOT EXISTS aliases (alias TEXT PRIMARY KEY, page_id TEXT NOT NULL);
-                CREATE TABLE IF NOT EXISTS lines (
-                    id INTEGER PRIMARY KEY, page_id TEXT NOT NULL, position INTEGER NOT NULL,
+                CREATE TABLE IF NOT EXISTS pages (
+                    id TEXT PRIMARY KEY, title TEXT NOT NULL, scanned_at REAL NOT NULL,
                     text TEXT NOT NULL, characters INTEGER NOT NULL, kanji INTEGER NOT NULL,
-                    kana INTEGER NOT NULL, words INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0,
-                    UNIQUE(page_id, position));
-                CREATE INDEX IF NOT EXISTS active_lines ON lines(deleted, id);
+                    hiragana INTEGER NOT NULL, katakana INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0);
+                CREATE TABLE IF NOT EXISTS aliases (alias TEXT PRIMARY KEY, page_id TEXT NOT NULL);
             """)
+            if "text" not in {row["name"] for row in db.execute("PRAGMA table_info(pages)")}:
+                self.migrate_lines(db)
+            db.execute("CREATE INDEX IF NOT EXISTS active_pages ON pages(deleted, scanned_at)")
+
+    def migrate_lines(self, db):
+        """Atomically regroup legacy lines, preserving edits, deletions and aliases."""
+        # Keep a one-time SQLite backup before replacing the old layout. SQLite's
+        # backup API also includes committed data that is still in a WAL file.
+        backup = self.path.with_suffix(".before-page-history.sqlite3")
+        if not backup.exists():
+            with closing(sqlite3.connect(backup)) as previous:
+                db.backup(previous)
+        db.execute("BEGIN IMMEDIATE")
+        db.execute("ALTER TABLE pages ADD COLUMN text TEXT NOT NULL DEFAULT ''")
+        for name in ("characters", "kanji", "hiragana", "katakana", "deleted"):
+            db.execute(f"ALTER TABLE pages ADD COLUMN {name} INTEGER NOT NULL DEFAULT 0")
+        texts = {}
+        for row in db.execute("SELECT page_id,text FROM lines WHERE deleted=0 ORDER BY position,id"):
+            texts.setdefault(row["page_id"], []).append(row["text"])
+        for row in db.execute("SELECT id FROM pages").fetchall():
+            text = "\n".join(texts.get(row["id"], []))
+            counts = character_counts(text)
+            db.execute("UPDATE pages SET text=?,characters=?,kanji=?,hiragana=?,katakana=?,deleted=? WHERE id=?",
+                       (text, counts["characters"], counts["kanji"], counts["hiragana"], counts["katakana"],
+                        int(not bool(text)), row["id"]))
+        db.execute("DROP TABLE lines")
 
     @contextmanager
     def connect(self):
@@ -58,16 +84,7 @@ class ReadingHistory:
             db.close()
 
     def counts(self, text):
-        if self.tagger is None:
-            # Both packages are already required by manga-ocr. Use its small
-            # bundled dictionary even if another incomplete UniDic is installed.
-            import fugashi
-            import unidic_lite
-            self.tagger = fugashi.GenericTagger(f'-r "{unidic_lite.DICDIR}/mecabrc" -d "{unidic_lite.DICDIR}"')
-        result = character_counts(text)
-        result["words"] = sum(any(readable(char) for char in word.surface)
-                              for word in self.tagger(unicodedata.normalize("NFKC", text)))
-        return result
+        return character_counts(text)
 
     def add(self, page_id, source_key, lines, title=""):
         if (not isinstance(page_id, str) or len(page_id) != 64
@@ -86,11 +103,12 @@ class ReadingHistory:
             duplicate = db.execute("SELECT page_id FROM aliases WHERE alias IN (?, ?)", aliases).fetchone()
             saved_id = duplicate["page_id"] if duplicate else page_id
             if not duplicate:
-                db.execute("INSERT INTO pages VALUES (?, ?, ?)", (saved_id, title[:300], time.time()))
-                for position, line in enumerate(lines):
-                    counts = self.counts(line)
-                    db.execute("INSERT INTO lines(page_id,position,text,characters,kanji,kana,words) VALUES(?,?,?,?,?,?,?)",
-                               (saved_id, position, line, counts["characters"], counts["kanji"], counts["kana"], counts["words"]))
+                text = "\n".join(lines)
+                counts = self.counts(text)
+                db.execute("""INSERT INTO pages(id,title,scanned_at,text,characters,kanji,hiragana,katakana)
+                    VALUES(?,?,?,?,?,?,?,?)""",
+                           (saved_id, title[:300], time.time(), text, counts["characters"], counts["kanji"],
+                            counts["hiragana"], counts["katakana"]))
             for alias in aliases:
                 db.execute("INSERT OR IGNORE INTO aliases VALUES (?, ?)", (alias, saved_id))
         return {"saved": not bool(duplicate), "page_id": saved_id}
@@ -99,29 +117,38 @@ class ReadingHistory:
         offset, limit = max(0, int(offset)), min(500, max(1, int(limit)))
         with self.lock, self.connect() as db:
             totals = dict(db.execute("""SELECT COALESCE(SUM(characters),0) AS characters,
-                COALESCE(SUM(kanji),0) AS kanji, COALESCE(SUM(kana),0) AS kana,
-                COALESCE(SUM(words),0) AS words, COUNT(*) AS lines,
-                COUNT(DISTINCT page_id) AS pages FROM lines WHERE deleted=0""").fetchone())
-            rows = db.execute("""SELECT lines.id,lines.text,lines.characters,lines.kanji,lines.kana,lines.words,
-                pages.title,pages.scanned_at FROM lines JOIN pages ON pages.id=lines.page_id
-                WHERE deleted=0 ORDER BY lines.id DESC LIMIT ? OFFSET ?""", (limit, offset)).fetchall()
-        return {"totals": totals, "lines": [dict(row) for row in rows], "offset": offset, "limit": limit}
+                COALESCE(SUM(kanji),0) AS kanji, COALESCE(SUM(hiragana),0) AS hiragana,
+                COALESCE(SUM(katakana),0) AS katakana, COUNT(*) AS pages FROM pages WHERE deleted=0""").fetchone())
+            rows = db.execute("""SELECT id,text,characters,kanji,hiragana,katakana,title,scanned_at FROM pages
+                WHERE deleted=0 ORDER BY scanned_at DESC,id DESC LIMIT ? OFFSET ?""", (limit, offset)).fetchall()
+        return {"totals": totals, "pages": [dict(row) for row in rows], "offset": offset, "limit": limit}
 
-    def edit(self, line_id, text):
-        if not isinstance(text, str) or not text.strip() or len(text) > 10000:
-            raise ValueError("Enter a nonempty line of at most 10,000 characters.")
+    def edit(self, page_id, text):
+        if not isinstance(text, str) or not text.strip() or len(text) > 100000:
+            raise ValueError("Enter nonempty page text of at most 100,000 characters.")
         with self.lock, self.connect() as db:
-            if not db.execute("SELECT id FROM lines WHERE id=? AND deleted=0", (line_id,)).fetchone():
-                raise KeyError("Saved line not found.")
+            if not db.execute("SELECT id FROM pages WHERE id=? AND deleted=0", (page_id,)).fetchone():
+                raise KeyError("Saved page not found.")
             text = text.strip()
             counts = self.counts(text)
-            db.execute("UPDATE lines SET text=?,characters=?,kanji=?,kana=?,words=? WHERE id=?",
-                       (text, counts["characters"], counts["kanji"], counts["kana"], counts["words"], line_id))
+            db.execute("UPDATE pages SET text=?,characters=?,kanji=?,hiragana=?,katakana=? WHERE id=?",
+                       (text, counts["characters"], counts["kanji"], counts["hiragana"], counts["katakana"], page_id))
         return {"updated": True}
 
-    def delete(self, line_id):
+    def delete(self, page_id):
+        return self.delete_pages([page_id])
+
+    def delete_pages(self, page_ids):
+        if (not isinstance(page_ids, list) or not 1 <= len(page_ids) <= 500
+                or any(not isinstance(page_id, str) or len(page_id) != 64
+                       or any(c not in "0123456789abcdef" for c in page_id) for page_id in page_ids)):
+            raise ValueError("Select between 1 and 500 saved pages to delete.")
+        page_ids = list(dict.fromkeys(page_ids))
+        placeholders = ",".join("?" for _ in page_ids)
         with self.lock, self.connect() as db:
-            changed = db.execute("UPDATE lines SET deleted=1,text='',characters=0,kanji=0,kana=0,words=0 WHERE id=? AND deleted=0", (line_id,)).rowcount
-            if not changed:
-                raise KeyError("Saved line not found.")
-        return {"deleted": True}
+            count = db.execute(f"SELECT COUNT(*) FROM pages WHERE id IN ({placeholders}) AND deleted=0", page_ids).fetchone()[0]
+            if count != len(page_ids):
+                raise KeyError("Saved page not found. Refresh history and try again.")
+            db.execute(f"""UPDATE pages SET deleted=1,text='',characters=0,kanji=0,hiragana=0,katakana=0
+                WHERE id IN ({placeholders})""", page_ids)
+        return {"deleted": True, "pages": len(page_ids)}
