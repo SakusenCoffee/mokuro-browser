@@ -1,5 +1,4 @@
-- Added reading-history saving controls to both launcher pages.
-- Moved setup activity and server output to a Logs tab.
-- Simplified the reading-history page.
+- Added a GitHub update-check fallback that does not use the API.
+- Launcher update failures are now shown on the Server page.
 
-Existing reading history is preserved when saving is disabled.
+Use Retry launcher check if the initial network request fails.

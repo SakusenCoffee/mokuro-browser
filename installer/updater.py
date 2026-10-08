@@ -3,14 +3,16 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import subprocess
 import sys
 import zipfile
 from installer.core import child_environment, default_root
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 from urllib.request import Request, urlopen
 
 API = "https://api.github.com/repos/SakusenCoffee/mokuro-browser/releases/latest"
+LATEST = "https://github.com/SakusenCoffee/mokuro-browser/releases/latest"
 MAX_BYTES = 2 * 1024 * 1024 * 1024
 
 
@@ -47,15 +49,49 @@ def latest(opener=urlopen):
     return tag.removeprefix("v"), assets
 
 
+def latest_download(name, opener=urlopen):
+    """Resolve a release without the rate-limited GitHub API."""
+    request = Request(LATEST, method="HEAD", headers={"User-Agent": "mokuro-browser"})
+    with opener(request, timeout=15) as response:
+        match = re.fullmatch(r"/SakusenCoffee/mokuro-browser/releases/tag/v?([0-9.]+)",
+                             urlparse(response.geturl()).path.rstrip("/"))
+    if not match:
+        raise RuntimeError("GitHub did not return a valid latest release tag.")
+    version = match.group(1)
+    version_key(version)
+    address = ("https://github.com/SakusenCoffee/mokuro-browser/releases/download/"
+               f"v{version}/{quote(name)}")
+    request = Request(address, method="HEAD", headers={"Accept": "application/octet-stream",
+                                                        "User-Agent": "mokuro-browser"})
+    with opener(request, timeout=20) as response:
+        final = urlparse(response.geturl())
+        size = int(response.headers.get("Content-Length", "0"))
+    if (final.scheme != "https" or not final.hostname or not any(
+            final.hostname == host or final.hostname.endswith("." + host)
+            for host in ("github.com", "githubusercontent.com"))):
+        raise RuntimeError("The latest launcher download redirected away from GitHub.")
+    if not 0 < size <= MAX_BYTES:
+        raise RuntimeError("GitHub returned an invalid launcher download size.")
+    return {"version": version, "name": name, "url": address, "size": size}
+
+
 def available(current, opener=urlopen, system=None, machine=None):
-    version, assets = latest(opener)
     name = asset_name(system, machine)
-    if version_key(version) <= version_key(current):
-        return None
-    asset = assets.get(name)
-    if not asset or not isinstance(asset.get("browser_download_url"), str):
-        return None
-    return {"version": version, "name": name, "url": asset["browser_download_url"], "size": int(asset.get("size") or 0)}
+    try:
+        version, assets = latest(opener)
+        if version_key(version) <= version_key(current):
+            return None
+        asset = assets.get(name)
+        if not asset or not isinstance(asset.get("browser_download_url"), str) or not int(asset.get("size") or 0):
+            raise RuntimeError(f"Release v{version} has no usable {name} asset.")
+        return {"version": version, "name": name, "url": asset["browser_download_url"],
+                "size": int(asset["size"])}
+    except Exception as api_error:
+        try:
+            update = latest_download(name, opener)
+        except Exception as fallback_error:
+            raise RuntimeError(f"GitHub update check failed ({api_error}); fallback failed ({fallback_error}).") from fallback_error
+        return update if version_key(update["version"]) > version_key(current) else None
 
 
 def destination(update, current=None, root=None, environment=None, system=None):

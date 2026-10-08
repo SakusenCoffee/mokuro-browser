@@ -125,6 +125,8 @@ def gui(args):
     ttk.Button(code_row, text="Copy", command=copy_code).pack(side="left")
     buttons = ttk.Frame(frame)
     buttons.pack(fill="x", pady=(8, 12))
+    update_status = tk.StringVar(value="Checking GitHub releases…")
+    ttk.Label(frame, textvariable=update_status, style="Subtle.TLabel", wraplength=880).pack(anchor="w", pady=(0, 8))
     ttk.Label(logs_frame, text="Activity logs", font=("Segoe UI", 18)).pack(anchor="w", pady=(0, 10))
     log_tabs = ttk.Notebook(logs_frame)
     log_tabs.pack(fill="both", expand=True)
@@ -480,6 +482,7 @@ def gui(args):
         if not update_info:
             return
         update_button.configure(state="disabled", text="Downloading update…")
+        update_status.set(f"Downloading launcher {update_info['version']} from GitHub…")
         write(f"Downloading Mokuro Browser {update_info['version']}. The browser extension will not be changed.")
         def work():
             try:
@@ -494,6 +497,7 @@ def gui(args):
 
     def check_for_update():
         update_button.configure(text="Checking launcher…", state="disabled")
+        update_status.set("Checking GitHub releases…")
         def work():
             try:
                 messages.put(("update_available", updater.available(bundled_version())))
@@ -526,14 +530,19 @@ def gui(args):
                     update_button.configure(text=f"Update launcher · {value['version']}",
                                             state="normal", command=apply_update)
                     write(f"Launcher update {value['version']} is available. The browser extension will stay as installed.")
+                    update_status.set(f"Launcher {value['version']} is available.")
                 else:
                     update_button.configure(text=f"Launcher current · {bundled_version()}", state="disabled")
+                    update_status.set(f"Launcher {bundled_version()} is current.")
                 continue
             if kind == "update_check_error":
-                update_button.configure(text="Check launcher update", state="normal", command=check_for_update)
+                update_button.configure(text="Retry launcher check", state="normal", command=check_for_update)
+                update_status.set("Could not check for launcher updates: " + value)
+                write("Launcher update check failed: " + value)
                 continue
             if kind == "update_error":
                 update_button.configure(state="normal", text="Retry launcher update")
+                update_status.set("Launcher update failed: " + value)
                 write("Launcher update failed: " + value)
                 continue
             if kind == "update_complete":

@@ -13,9 +13,11 @@ from installer import main, updater
 
 
 class Response(io.BytesIO):
-    def __init__(self, data, address="https://github.com/SakusenCoffee/mokuro-browser/releases/download/v1/file"):
+    def __init__(self, data, address="https://github.com/SakusenCoffee/mokuro-browser/releases/download/v1/file",
+                 headers=None):
         super().__init__(data)
         self.address = address
+        self.headers = headers or {}
 
     def __enter__(self):
         return self
@@ -53,6 +55,21 @@ class UpdaterTests(unittest.TestCase):
         self.assertEqual(result["name"], "MokuroBrowserSetup-linux-x64.AppImage")
         self.assertIsNone(updater.available("1.2.0", lambda request, timeout: Response(json.dumps(value).encode()),
                                             system="linux", machine="x86_64"))
+
+    def test_update_check_falls_back_to_latest_release_redirect(self):
+        def opener(request, timeout):
+            if request.full_url == updater.API:
+                raise OSError("API unavailable")
+            if request.full_url == updater.LATEST:
+                return Response(b"", "https://github.com/SakusenCoffee/mokuro-browser/releases/tag/v1.3.0")
+            self.assertEqual(request.full_url,
+                             "https://github.com/SakusenCoffee/mokuro-browser/releases/download/v1.3.0/MokuroBrowserSetup-linux-x64.AppImage")
+            return Response(b"", "https://release-assets.githubusercontent.com/file",
+                            {"Content-Length": "1234"})
+        result = updater.available("1.2.0", opener, system="linux", machine="x86_64")
+        self.assertEqual(result, {"version": "1.3.0", "name": "MokuroBrowserSetup-linux-x64.AppImage",
+                                  "url": "https://github.com/SakusenCoffee/mokuro-browser/releases/download/v1.3.0/MokuroBrowserSetup-linux-x64.AppImage",
+                                  "size": 1234})
 
     def test_download_checks_final_host_and_size(self):
         update = {"url": "https://github.com/SakusenCoffee/mokuro-browser/releases/download/v1/app", "size": 4}
