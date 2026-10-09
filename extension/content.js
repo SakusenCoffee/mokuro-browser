@@ -51,13 +51,6 @@
       background:#fffcf3;border:1px solid #c7d8cd;box-shadow:0 3px 20px #0003;border-radius:12px}
     .notice{bottom:24px;left:24px;max-width:430px;padding:14px 18px;white-space:pre-wrap}
     .notice.error{color:#9e3127;border-color:#d8afa6}
-    .toolbar{position:fixed;bottom:24px;right:24px;width:44px;height:44px;pointer-events:auto}
-    .orb{display:block;position:absolute;right:0;bottom:0;width:24px;height:24px;padding:0;border-radius:50%;border:1px solid #9ad6ff;
-      background:radial-gradient(circle at 35% 30%,#e0f5ff,#76b9ed 65%,#4a8dcd);box-shadow:0 0 14px #80c9ff70;
-      opacity:0;transform:scale(.8);transition:opacity .3s ease,transform .3s ease;cursor:pointer}
-    .layer:has(.block:hover) ~ .toolbar.ready .orb,.toolbar.ready.selection .orb{opacity:.35;transform:scale(1)}
-    .toolbar.ready:hover .orb,.toolbar.ready:focus-within .orb{opacity:.65;transform:scale(1)}
-    .orb:hover{background:radial-gradient(circle at 35% 30%,#e0f5ff,#76b9ed 65%,#4a8dcd)}
     button{font:600 12px system-ui;color:#225c50;background:#eef3e9;border:0;border-radius:7px;padding:9px 11px;cursor:pointer}
     button:hover{background:#dfe9d9}.panel{top:24px;right:24px;width:360px;max-width:90vw;max-height:70vh;overflow:auto;padding:18px;
       color:#edf3fb;background:rgba(8,12,18,.88);border-color:#91a9c23f;box-shadow:0 8px 32px #0006;backdrop-filter:blur(12px)}
@@ -108,7 +101,6 @@
     pickerCleanup?.();
     for (const item of layers) { item.cleanup(); item.node.remove(); }
     layers.clear();
-    root.querySelector(".toolbar")?.remove();
     panel?.remove(); panel = null;
     fullText = "";
     notice.style.display = "none";
@@ -120,43 +112,24 @@
     element.onclick = action;
     return element;
   }
-  function toolbar() {
-    root.querySelector(".toolbar")?.remove();
-    const bar = document.createElement("div"); bar.className = "toolbar";
-    const orb = button("", () => {
-      if (panel) { panel.remove(); panel = null; return; }
-      panel = document.createElement("section"); panel.className = "panel";
-      panel.setAttribute("aria-label", "All scanned text");
-      panel.append(button("Copy all text", async () => {
-        try { await navigator.clipboard.writeText(fullText); notify("Copied OCR text.", false, true); }
-        catch { notify("Select the text below and copy it with Ctrl+C.", false, true); }
-      }));
-      const pre = document.createElement("pre"); pre.textContent = fullText;
-      panel.append(pre); root.append(panel);
-    });
-    orb.className = "orb";
-    orb.setAttribute("aria-label", "Show all scanned text");
-    orb.title = "All scanned text";
-    bar.append(orb);
-    bar.addEventListener("click", event => {
-      // Mouse clicks should not leave the hover menu latched open. Keyboard
-      // users retain focus so the controls remain reachable with Tab.
-      if (event.detail > 0 && bar.contains(document.activeElement)) document.activeElement.blur();
-    });
-    root.append(bar);
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      if (bar.isConnected) bar.classList.add("ready");
+  function showTextPanel() {
+    if (panel) { panel.remove(); panel = null; return; }
+    if (!fullText) {
+      notify("Scan a page before showing all scanned text.", true, true);
+      return;
+    }
+    panel = document.createElement("section"); panel.className = "panel";
+    panel.setAttribute("aria-label", "All scanned text");
+    panel.append(button("Copy all text", async () => {
+      try { await navigator.clipboard.writeText(fullText); notify("Copied OCR text.", false, true); }
+      catch { notify("Select the text below and copy it with Ctrl+C.", false, true); }
     }));
+    const pre = document.createElement("pre"); pre.textContent = fullText;
+    panel.append(pre); root.append(panel);
   }
   document.addEventListener("keydown", event => {
     if (event.key === "Escape" && panel) { panel.remove(); panel = null; }
   });
-  document.addEventListener("selectionchange", () => {
-    const selection = window.getSelection();
-    root.querySelector(".toolbar")?.classList.toggle("selection", !!selection && !selection.isCollapsed
-      && root.contains(selection.anchorNode));
-  });
-
   function fitPosition(value, remaining) {
     if (value.endsWith("%")) return remaining * parseFloat(value) / 100;
     if (value === "left" || value === "top") return 0;
@@ -298,7 +271,7 @@
       resize.disconnect(); clearInterval(interval); cancelAnimationFrame(frame);
       window.removeEventListener("scroll", schedule, true); window.removeEventListener("resize", schedule);
     }});
-    layout(); toolbar();
+    layout();
     notify(`${result.blocks.length} text regions ready. Hover to select text.`, false, true);
   }
 
@@ -450,6 +423,7 @@
         return {kind: "viewport", pageKey, x: scrollX, y: scrollY, width: innerWidth, height: innerHeight};
       }
       if (message.type === "PICK_IMAGE") pick();
+      if (message.type === "SHOW_TEXT") showTextPanel();
       if (message.type === "CLEAR") clear(true);
       if (message.type === "NOTICE") notify(message.text, message.error);
       if (message.type === "RENDER") render(message.target, message.result);

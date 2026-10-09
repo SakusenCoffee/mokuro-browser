@@ -8,11 +8,11 @@ Download from [Releases](https://github.com/SakusenCoffee/mokuro-browser/release
 
 | Platform | Installer |
 | --- | --- |
-| Windows x64 | `MokuroBrowserSetup-windows-x64.exe` |
-| macOS Apple Silicon | `MokuroBrowserSetup-macos-arm64.zip` |
-| macOS Intel | `MokuroBrowserSetup-macos-x64.zip` |
-| Linux x64 | `MokuroBrowserSetup-linux-x64.AppImage` |
-| Linux ARM64 | `MokuroBrowserSetup-linux-arm64.AppImage` |
+| Windows x64 | `MokuroBrowser-windows-x64.exe` |
+| macOS Apple Silicon | `MokuroBrowser-macos-arm64.zip` |
+| macOS Intel | `MokuroBrowser-macos-x64.zip` |
+| Linux x64 | `MokuroBrowser-linux-x64.AppImage` |
+| Linux ARM64 | `MokuroBrowser-linux-arm64.AppImage` |
 
 Run the installer; extract macOS ZIPs first. Linux also has `.tar.gz` downloads.
 For AppImages, enable executable permission. If FUSE is unavailable, use
@@ -39,7 +39,7 @@ if needed, paste the launcher's connect code into **Pair with this computer**.
 
 - **Scan manga image** scans the largest image; **Auto-scan manga** scans as pages change.
 - Hover text to select, copy, or use Yomitan. **Hover text size** adjusts the uniform page font.
-- Click the fading blue orb for all scanned text. Click again or press Escape to close.
+- Use **Show all scanned text** in the extension popup to open the full OCR text window.
 - Use **Choose an image** or **Scan visible tab area** for unsupported readers.
 - **Alt+Shift+M** scans; **Clear OCR from this tab** hides overlays.
 - **Reading history** stores editable pages with character, kanji, hiragana, and katakana totals. Ctrl/Command or Shift selects multiple pages for deletion.

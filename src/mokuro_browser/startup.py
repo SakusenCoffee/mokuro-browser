@@ -22,7 +22,7 @@ def systemd_quote(value):
         "%", "%%").replace("$", "$$").replace("\n", "\\n").replace("\r", "\\r") + '"'
 
 def systemd_unit(args):
-    return ("[Unit]\nDescription=Local Mokuro OCR for the browser\nAfter=network.target\n\n"
+    return ("[Unit]\nDescription=Mokuro Browser OCR server\nAfter=network.target\n\n"
             "[Service]\nType=simple\nExecStart=" + " ".join(map(systemd_quote, args)) +
             "\nRestart=on-failure\nRestartSec=3\n\n[Install]\nWantedBy=default.target\n")
 

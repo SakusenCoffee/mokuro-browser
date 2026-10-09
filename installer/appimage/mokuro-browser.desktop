@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
-Name=Mokuro Browser Setup
+Name=Mokuro Browser
 Comment=Install or update the local manga OCR server and browser companion
-Exec=MokuroBrowserSetup
+Exec=MokuroBrowser
 Icon=mokuro-browser
 Terminal=false
 StartupWMClass=MokuroBrowser

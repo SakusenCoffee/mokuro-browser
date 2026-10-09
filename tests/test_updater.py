@@ -34,7 +34,7 @@ class Response(io.BytesIO):
 class UpdaterTests(unittest.TestCase):
     @mock.patch.object(updater.os, "access", return_value=True)
     def test_writable_appimage_is_replaced_regardless_of_suffix_case(self, access):
-        update = {"name": "MokuroBrowserSetup-linux-x64.AppImage"}
+        update = {"name": "MokuroBrowser-linux-x64.AppImage"}
         current = Path("Mokuro.appimage").absolute()
         self.assertEqual(updater.destination(update, environment={"APPIMAGE": str(current)},
                                              system="linux"), current)
@@ -42,19 +42,19 @@ class UpdaterTests(unittest.TestCase):
 
     @mock.patch.object(updater.os, "access", return_value=False)
     def test_read_only_appimage_uses_private_update_folder(self, access):
-        update = {"name": "MokuroBrowserSetup-linux-x64.AppImage"}
+        update = {"name": "MokuroBrowser-linux-x64.AppImage"}
         result = updater.destination(update, root="/private", environment={"APPIMAGE": "/apps/Mokuro.AppImage"},
                                      system="linux")
-        self.assertEqual(result, Path("/private/updates/MokuroBrowserSetup-linux-x64.AppImage"))
+        self.assertEqual(result, Path("/private/updates/MokuroBrowser-linux-x64.AppImage"))
 
     def test_newer_matching_asset_is_offered(self):
-        value = {"tag_name": "v1.2.0", "assets": [{"name": "MokuroBrowserSetup-linux-x64.AppImage",
+        value = {"tag_name": "v1.2.0", "assets": [{"name": "MokuroBrowser-linux-x64.AppImage",
                  "browser_download_url": "https://github.com/SakusenCoffee/mokuro-browser/releases/download/v1/app",
                  "size": 4}]}
         result = updater.available("1.1.9", lambda request, timeout: Response(json.dumps(value).encode()),
                                    system="linux", machine="x86_64")
         self.assertEqual(result["version"], "1.2.0")
-        self.assertEqual(result["name"], "MokuroBrowserSetup-linux-x64.AppImage")
+        self.assertEqual(result["name"], "MokuroBrowser-linux-x64.AppImage")
         self.assertIsNone(updater.available("1.2.0", lambda request, timeout: Response(json.dumps(value).encode()),
                                             system="linux", machine="x86_64"))
 
@@ -65,12 +65,12 @@ class UpdaterTests(unittest.TestCase):
             if request.full_url == updater.LATEST:
                 return Response(b"", "https://github.com/SakusenCoffee/mokuro-browser/releases/tag/v1.3.0")
             self.assertEqual(request.full_url,
-                             "https://github.com/SakusenCoffee/mokuro-browser/releases/download/v1.3.0/MokuroBrowserSetup-linux-x64.AppImage")
+                             "https://github.com/SakusenCoffee/mokuro-browser/releases/download/v1.3.0/MokuroBrowser-linux-x64.AppImage")
             return Response(b"", "https://release-assets.githubusercontent.com/file",
                             {"Content-Length": "1234"})
         result = updater.available("1.2.0", opener, system="linux", machine="x86_64")
-        self.assertEqual(result, {"version": "1.3.0", "name": "MokuroBrowserSetup-linux-x64.AppImage",
-                                  "url": "https://github.com/SakusenCoffee/mokuro-browser/releases/download/v1.3.0/MokuroBrowserSetup-linux-x64.AppImage",
+        self.assertEqual(result, {"version": "1.3.0", "name": "MokuroBrowser-linux-x64.AppImage",
+                                  "url": "https://github.com/SakusenCoffee/mokuro-browser/releases/download/v1.3.0/MokuroBrowser-linux-x64.AppImage",
                                   "size": 1234})
 
     def test_default_update_opener_retries_with_bundled_ca_store(self):
@@ -101,7 +101,7 @@ class UpdaterTests(unittest.TestCase):
     def test_mac_archive_restores_executable_permission(self):
         with tempfile.TemporaryDirectory() as directory:
             archive_path = Path(directory) / "mac.zip"
-            entry = zipfile.ZipInfo("MokuroBrowserSetup.app/Contents/MacOS/MokuroBrowserSetup")
+            entry = zipfile.ZipInfo("MokuroBrowser.app/Contents/MacOS/MokuroBrowser")
             entry.external_attr = 0o100755 << 16
             with zipfile.ZipFile(archive_path, "w") as archive:
                 archive.writestr(entry, b"launcher")

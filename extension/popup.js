@@ -7,6 +7,11 @@ const pairing = document.querySelector("#pairing");
 const pairingCode = document.querySelector("#pairing-code");
 const fontSize = document.querySelector("#hover-font-size");
 const fontValue = document.querySelector("#hover-font-value");
+const launcherVersion = document.querySelector("#launcher-version");
+function showVersion(value) {
+  if (value === undefined || value === null || value === "") return;
+  launcherVersion.textContent = `v${String(value).replace(/^v/, "")}`;
+}
 function showFontSize(value) {
   const percent = Number.isFinite(Number(value)) ? Math.min(200, Math.max(50, Number(value))) : 100;
   fontSize.value = String(percent);
@@ -53,6 +58,7 @@ auto.onclick = async () => {
   finally { auto.disabled = false; }
 };
 function showHealth(reply) {
+  showVersion(reply.data?.version);
   showServer({running: reply.ok});
   status.textContent = reply.ok
     ? (reply.data.model === "ready" ? "● Local server ready · models loaded"
@@ -91,6 +97,7 @@ async function refreshServer() {
   try {
     const reply = await chrome.runtime.sendMessage({type: "SERVER_STATUS"});
     if (!reply.ok) throw new Error(reply.error);
+    showVersion(reply.data?.version || reply.data?.health?.version);
     showServer(reply.data);
     controlAvailable = true;
     serverHint.textContent = "Starts and stops the local OCR server. It stays off until you turn it on.";
@@ -132,7 +139,7 @@ document.querySelector("#pair").onclick = async () => {
   } catch (failure) { error.textContent = failure.message; }
   finally { button.disabled = false; }
 };
-for (const [id, type] of [["largest", "SCAN_LARGEST"], ["check", "CHECK_PAGE"], ["pick", "PICK_IMAGE"], ["visible", "SCAN_VISIBLE"], ["clear", "CLEAR"]]) {
+for (const [id, type] of [["largest", "SCAN_LARGEST"], ["check", "CHECK_PAGE"], ["pick", "PICK_IMAGE"], ["visible", "SCAN_VISIBLE"], ["text", "SHOW_TEXT"], ["clear", "CLEAR"]]) {
   document.getElementById(id).onclick = async () => {
     error.textContent = "";
     try {

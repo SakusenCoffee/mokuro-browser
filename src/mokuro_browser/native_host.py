@@ -17,6 +17,7 @@ import time
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from . import __version__
 from .config import config_dir, data_dir, log_dir, pairing_token
 
 HOST_NAME = "com.sakusencoffee.mokuro_browser"
@@ -203,12 +204,13 @@ def request(config, path, method="GET"):
 
 def status(config):
     try:
-        return {"running": True, "health": request(config, "/health")}
+        return {"running": True, "health": request(config, "/health"), "version": __version__}
     except HTTPError as error:
-        return {"running": False, "error": "Port %s is occupied by another local program." % config["port"]
+        return {"running": False, "version": __version__,
+                "error": "Port %s is occupied by another local program." % config["port"]
                 if error.code != 401 else "The local server pairing token does not match."}
     except (OSError, URLError, ValueError):
-        return {"running": False}
+        return {"running": False, "version": __version__}
 
 
 def _log(config, message):

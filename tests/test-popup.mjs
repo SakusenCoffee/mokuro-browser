@@ -41,8 +41,9 @@ async function popupWithHealth(health) {
   return element;
 }
 
-const connected = await popupWithHealth({ok: true, data: {model: 'ready'}});
+const connected = await popupWithHealth({ok: true, data: {model: 'ready', version: '0.1.15'}});
 assert.match(connected('#status').textContent, /Local server ready/);
+assert.equal(connected('#launcher-version').textContent, 'v0.1.15');
 assert.equal(connected('#server').textContent, 'Server: On');
 assert.equal(connected('#server').getAttribute('data-connected'), 'true');
 assert.equal(connected('#server').disabled, true);

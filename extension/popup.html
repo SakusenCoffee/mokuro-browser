@@ -1,7 +1,7 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Local Mokuro</title><link rel="stylesheet" href="popup.css"></head>
+<html lang="en"><head><meta charset="utf-8"><title>Mokuro Browser</title><link rel="stylesheet" href="popup.css"></head>
 <body>
-  <header><img class="mark" src="icon-128.png" alt=""><div><h1>Local Mokuro</h1><p>Read manga with selectable text</p></div></header>
+  <header><img class="mark" src="icon-128.png" alt=""><div><h1>Mokuro Browser <span id="launcher-version">v—</span></h1><p>Read manga with selectable text</p></div></header>
   <div id="status" role="status">Checking local server…</div>
   <button id="server" aria-pressed="false" disabled>Server: checking…</button>
   <div class="loads" aria-label="System load"><span>CPU <strong id="cpu-load">—</strong></span><span>GPU <strong id="gpu-load">—</strong></span></div>
@@ -23,6 +23,7 @@
   <button id="check">Check / restore page text</button>
   <button id="pick">Choose an image on this page</button>
   <button id="visible">Scan visible tab area</button>
+  <button id="text">Show all scanned text</button>
   <button id="clear" class="quiet">Clear OCR from this tab</button>
   <p class="hint">Hover over detected text and use your usual Yomitan scan shortcut. Use the visible tab option for canvas readers.</p>
   <p class="shortcut">Shortcut: Alt + Shift + M</p>

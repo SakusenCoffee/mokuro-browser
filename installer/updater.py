@@ -49,11 +49,11 @@ def asset_name(system=None, machine=None):
     if system == "win32":
         if arch != "x64":
             raise RuntimeError("A Windows ARM64 launcher update is not available yet.")
-        return "MokuroBrowserSetup-windows-x64.exe"
+        return "MokuroBrowser-windows-x64.exe"
     if system == "darwin":
-        return f"MokuroBrowserSetup-macos-{arch}.zip"
+        return f"MokuroBrowser-macos-{arch}.zip"
     if system.startswith("linux"):
-        return f"MokuroBrowserSetup-linux-{arch}.AppImage"
+        return f"MokuroBrowser-linux-{arch}.AppImage"
     raise RuntimeError("Launcher updates are not available on this system.")
 
 
@@ -173,7 +173,7 @@ def launch_update(path):
                 path = destination / member.filename
                 if not member.is_dir() and member.external_attr >> 16 & 0o111:
                     path.chmod(0o755)
-        candidates = list(destination.glob("*.app/Contents/MacOS/MokuroBrowserSetup"))
+        candidates = list(destination.glob("*.app/Contents/MacOS/MokuroBrowser"))
         if len(candidates) != 1:
             raise RuntimeError("The macOS update archive is missing its launcher.")
         executable = candidates[0]

@@ -61,7 +61,7 @@ def main():
     subprocess.run(native_options, cwd=ROOT, check=True)
     native_host = native_output / ("MokuroBrowserNativeHost.exe" if os.name == "nt" else "MokuroBrowserNativeHost")
     options = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onefile",
-               "--name", "MokuroBrowserSetup", "--distpath", str(output),
+               "--name", "MokuroBrowser", "--distpath", str(output),
                "--workpath", str(ROOT / "build/pyinstaller"), "--specpath", str(ROOT / "build"),
                "--paths", str(ROOT), "--add-data", f"{wheel}{os.pathsep}payload",
                "--hidden-import", "certifi",
@@ -86,19 +86,19 @@ def main():
     arch = "arm64" if platform.machine().lower() in ("arm64", "aarch64") else "x64"
     destination = ROOT / "dist"
     destination.mkdir(exist_ok=True)
-    executable = output / ("MokuroBrowserSetup.exe" if os.name == "nt" else "MokuroBrowserSetup")
+    executable = output / ("MokuroBrowser.exe" if os.name == "nt" else "MokuroBrowser")
     if os.name == "nt":
-        artifact = destination / f"MokuroBrowserSetup-windows-{arch}.exe"
+        artifact = destination / f"MokuroBrowser-windows-{arch}.exe"
         shutil.copyfile(executable, artifact)
     elif sys.platform == "darwin" and not args.console:
-        artifact = destination / f"MokuroBrowserSetup-macos-{arch}.zip"
+        artifact = destination / f"MokuroBrowser-macos-{arch}.zip"
         # ditto preserves the app's executable permissions and bundle structure.
         subprocess.run(["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent",
-                        str(output / "MokuroBrowserSetup.app"), str(artifact)], check=True)
+                        str(output / "MokuroBrowser.app"), str(artifact)], check=True)
     else:
-        artifact = destination / f"MokuroBrowserSetup-linux-{arch}.tar.gz"
+        artifact = destination / f"MokuroBrowser-linux-{arch}.tar.gz"
         with tarfile.open(artifact, "w:gz") as archive:
-            archive.add(executable, arcname="MokuroBrowserSetup")
+            archive.add(executable, arcname="MokuroBrowser")
     (ROOT / "build/installer-build.json").write_text(json.dumps({"executable": str(executable), "artifact": str(artifact), "native_host": str(native_host)}))
     print(f"Installer: {artifact}")
 

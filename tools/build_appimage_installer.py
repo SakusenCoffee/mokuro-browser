@@ -57,7 +57,7 @@ def verified_download(url, path, checksum):
 def prepare_appdir(executable, destination):
     shutil.copytree(ROOT / "installer/appimage", destination)
     (destination / "AppRun").chmod(0o755)
-    binary = destination / "usr/bin/MokuroBrowserSetup"
+    binary = destination / "usr/bin/MokuroBrowser"
     binary.parent.mkdir(parents=True)
     shutil.copyfile(executable, binary)
     binary.chmod(0o755)
@@ -81,10 +81,10 @@ def build(executable, output_dir, tools_dir):
         f"https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-{arch}",
         tools_dir / f"runtime-{arch}-{pins['runtime'][:12]}", pins["runtime"])
     output_dir.mkdir(parents=True, exist_ok=True)
-    artifact = (output_dir / f"MokuroBrowserSetup-linux-{pins['label']}.AppImage").absolute()
+    artifact = (output_dir / f"MokuroBrowser-linux-{pins['label']}.AppImage").absolute()
     with tempfile.TemporaryDirectory(prefix="mokuro-appimage-build-") as temporary:
         folder = Path(temporary)
-        appdir = folder / "MokuroBrowserSetup.AppDir"
+        appdir = folder / "MokuroBrowser.AppDir"
         prepare_appdir(executable, appdir)
         # Extract the packaging tool rather than requiring FUSE on the builder.
         subprocess.run([str(tool.absolute()), "--appimage-extract"], cwd=folder,

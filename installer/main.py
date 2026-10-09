@@ -56,7 +56,8 @@ def gui(args):
         import ctypes
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("SakusenCoffee.MokuroBrowser")
     root = tk.Tk(className="MokuroBrowser")
-    root.title("Mokuro Browser")
+    launcher_version = bundled_version()
+    root.title(f"Mokuro Browser v{launcher_version}")
     root.configure(bg="#101919")
     assets = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
     icon = assets / ("payload/icon-128.png" if getattr(sys, "frozen", False) else "extension/icon-128.png")
@@ -92,7 +93,7 @@ def gui(args):
     notebook.add(frame, text="Server")
     notebook.add(history_frame, text="Reading history")
     notebook.add(logs_frame, text="Logs")
-    ttk.Label(frame, text="Mokuro Browser", style="Title.TLabel").pack(anchor="w")
+    ttk.Label(frame, text=f"Mokuro Browser v{launcher_version}", style="Title.TLabel").pack(anchor="w")
     ttk.Label(frame, text="Your private manga OCR control room. The server runs while this window is open.", style="Subtle.TLabel").pack(anchor="w", pady=(4, 16))
     reuse = tk.BooleanVar(value=not args.fresh)
     ttk.Checkbutton(frame, text="Reuse an existing Mokuro / GPU environment when available", variable=reuse).pack(anchor="w")

@@ -58,7 +58,7 @@ def main(argv=None):
                 from .startup import install
                 print(f"Automatic startup installed: {install()}")
             else:
-                print("Use the Server button in the Local Mokuro extension to start OCR.")
+                print("Use the Server button in the Mokuro Browser extension to start OCR.")
         else:
             from .startup import install, remove
             if args.action == "install":

@@ -25,7 +25,7 @@ async function api(path, options = {}, pairingCode) {
         ...options, headers: {...options.headers, Authorization: `Bearer ${value}`},
         signal: AbortSignal.timeout(25000)
       });
-    } catch { throw new Error("Local Mokuro server is off. Open the Mokuro Browser app."); }
+    } catch { throw new Error("Mokuro Browser server is off. Open the Mokuro Browser app."); }
   };
   let response = await request(token);
   if (response.status === 401 && !pairingCode) {
@@ -137,7 +137,7 @@ async function launch(message, sender) {
       if (!result?.ok) throw new Error(result?.error || "The local server control did not respond.");
       return result;
     } catch (error) {
-      throw new Error("Local server control is unavailable. Run Mokuro Browser Setup again, then reload the extension. " + error.message);
+      throw new Error("Local server control is unavailable. Run Mokuro Browser again, then reload the extension. " + error.message);
     }
   }
   if (message.type === "AUTO_PAIR") {
@@ -202,6 +202,9 @@ async function launch(message, sender) {
   } else if (message.type === "PICK_IMAGE") {
     const reply = await tell(tabId, "PICK_IMAGE");
     if (reply?.error) throw new Error(reply.error);
+  } else if (message.type === "SHOW_TEXT") {
+    const reply = await tell(tabId, "SHOW_TEXT");
+    if (reply?.error) throw new Error(reply.error);
   } else if (message.type === "SCAN_LARGEST") {
     const target = await tell(tabId, "LARGEST");
     if (target.error) throw new Error(target.error);
@@ -222,7 +225,7 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
 });
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({id: "mokuro-image", title: "Scan image with Local Mokuro", contexts: ["image"]});
+    chrome.contextMenus.create({id: "mokuro-image", title: "Scan image with Mokuro Browser", contexts: ["image"]});
   });
 });
 chrome.tabs.onActivated.addListener(async ({tabId}) => {

@@ -167,9 +167,9 @@ try {
     await page.send("Input.dispatchMouseEvent", {type:"mouseReleased", button:"left", clickCount:1, ...point});
   }
   assert.equal(await page.evaluate("qaPageTurns"), 2, "real clicks reach the reader's page-turn handler");
-  await inspect("function(){this.querySelector('.orb').click();return true}");
+  await worker.evaluate(`tell(${tabId},'SHOW_TEXT')`);
   assert((await inspect("function(){return this.querySelector('.panel pre').textContent}")).includes("活な少女。"));
-  await inspect("function(){this.querySelector('.orb').click();return true}");
+  await worker.evaluate(`tell(${tabId},'SHOW_TEXT')`);
   const screenshot = await page.send("Page.captureScreenshot", {format: "png"});
   await writeFile(path.join(os.tmpdir(), "mokuro-browser-extension-qa.png"), Buffer.from(screenshot.data, "base64"));
   await worker.evaluate(`launch({type:'CLEAR',tabId:${tabId}}, {})`);

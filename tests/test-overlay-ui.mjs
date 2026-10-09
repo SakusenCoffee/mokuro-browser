@@ -69,13 +69,10 @@ try {
   assert(!rendered.error, JSON.stringify(rendered));
   assert.deepEqual(await evaluate(`MokuroResults.verticalParts('１４年…')`), ['１４', '年', '…']);
   assert.deepEqual(await evaluate(`MokuroResults.verticalParts('123年')`), ['1','2','3','年']);
-  const orbOpacity = () => evaluate(`getComputedStyle(document.querySelector('.orb')).opacity`);
-  assert.equal(await orbOpacity(), '0');
-  assert.equal(await evaluate(`document.querySelectorAll('.toolbar button').length`), 1);
-  assert.equal(await evaluate(`parseFloat(getComputedStyle(document.querySelector('.orb')).width)`), 24);
+  assert.equal(await evaluate(`document.querySelector('.orb')`), null);
+  assert.equal(await evaluate(`document.querySelector('.toolbar')`), null);
   await page('Input.dispatchMouseEvent', {type:'mouseMoved', x:160, y:130});
   await sleep(350);
-  assert.equal(await orbOpacity(), '0.35');
   const metrics = await evaluate(`(()=>{
     const line=document.querySelectorAll('.line')[2], span=line.querySelector('.digits');
     const a=document.createRange(), b=document.createRange();
@@ -114,34 +111,15 @@ try {
   await sleep(50);
   assert(Math.abs(await measure() / width - .5) < .01);
   assert.equal(await evaluate(`getComputedStyle(document.querySelector('.ink-mask')).opacity`), '1');
-  await page('Input.dispatchMouseEvent', {type:'mouseMoved', x:664, y:564});
-  await sleep(350);
-  assert.equal(await orbOpacity(), '0.65');
-  await evaluate(`document.querySelector('.orb').click()`);
+  const panelReply = await evaluate(`deliver({type:'SHOW_TEXT'})`);
+  assert(!panelReply.error, JSON.stringify(panelReply));
   assert.equal(await evaluate(`document.querySelector('.panel pre').textContent`), result.blocks[0].lines.join('\n'));
   assert.equal(await evaluate(`getComputedStyle(document.querySelector('.panel')).backgroundColor`), 'rgba(8, 12, 18, 0.88)');
   assert.equal(await evaluate(`getComputedStyle(document.querySelector('.panel pre')).color`), 'rgb(237, 243, 251)');
-  await evaluate(`document.querySelector('.orb').click()`);
+  await evaluate(`deliver({type:'SHOW_TEXT'})`);
   assert.equal(await evaluate(`document.querySelector('.panel')`), null);
-  await evaluate(`document.querySelector('.orb').click();document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}))`);
+  await evaluate(`deliver({type:'SHOW_TEXT'});document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}))`);
   assert.equal(await evaluate(`document.querySelector('.panel')`), null);
-  await page('Input.dispatchMouseEvent', {type:'mouseMoved', x:500, y:300});
-  await sleep(350);
-  assert.equal(await orbOpacity(), '0');
-  assert.equal(await evaluate(`document.querySelector('.toolbar-actions')`), null);
-  // The transition also applies to every subsequent appearance/disappearance.
-  await page('Input.dispatchMouseEvent', {type:'mouseMoved', x:664, y:564});
-  await sleep(120);
-  assert(Number(await orbOpacity()) > 0 && Number(await orbOpacity()) < .65);
-  await sleep(250);
-  await page('Input.dispatchMouseEvent', {type:'mouseMoved', x:500, y:300});
-  await sleep(120);
-  assert(Number(await orbOpacity()) > 0 && Number(await orbOpacity()) < .65);
-  await sleep(250);
-  await evaluate(`(()=>{const range=document.createRange();range.selectNodeContents(document.querySelector('.line'));
-    const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range)})()`);
-  await sleep(350);
-  assert.equal(await orbOpacity(), '0.35', 'selecting OCR text reveals the orb');
   // Mixed font sizes, a very narrow ellipsis, a wide region box and horizontal
   // lines: every glyph gets the page median while masks remain source-sized.
   const mixed = {img_width:235, img_height:284, blocks:[
@@ -195,7 +173,7 @@ try {
     const shot=await page('Page.captureScreenshot',{format:'png'});
     await writeFile('/tmp/mokuro-normalized-bubble.png',Buffer.from(shot.data,'base64'));
   }
-  console.log('PASS: page-wide normalization, equal gaps, fitted backgrounds, paired digits and contextual orb');
+  console.log('PASS: page-wide normalization, equal gaps, fitted backgrounds, paired digits and text panel');
 } finally {
   socket?.close();
   browser.kill();

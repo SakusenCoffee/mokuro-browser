@@ -31,7 +31,7 @@ requirements if accepted, instead of the Azure steps below.
    [the official signing action](https://github.com/Azure/artifact-signing-action).
    The workflow needs `id-token: write` for OIDC. Configure the trusted repository
    and release environment in Azure rather than storing an Azure account password.
-3. Sign `dist/MokuroBrowserSetup-windows-x64.exe` **after** the PyInstaller build
+3. Sign `dist/MokuroBrowser-windows-x64.exe` **after** the PyInstaller build
    and **before** uploading it. Use SHA256 and the service's RFC3161 timestamp.
    Supply the Azure account endpoint, signing account and Public Trust profile
    to the action. The existing workflow must be updated to perform this step;
@@ -39,7 +39,7 @@ requirements if accepted, instead of the Azure steps below.
 4. On a Windows machine, verify the downloaded final executable:
 
    ```powershell
-   Get-AuthenticodeSignature .\MokuroBrowserSetup-windows-x64.exe | Format-List Status,SignerCertificate,TimeStamperCertificate
+   Get-AuthenticodeSignature .\MokuroBrowser-windows-x64.exe | Format-List Status,SignerCertificate,TimeStamperCertificate
    ```
 
    Its status should be `Valid`, with the expected verified publisher. Also run
@@ -76,12 +76,12 @@ then recreate the ZIP so the downloadable file contains the ticket. For Apple
 silicon, with a previously configured `mokuro-notary` keychain credential profile:
 
 ```console
-xcrun notarytool submit dist/MokuroBrowserSetup-macos-arm64.zip --keychain-profile mokuro-notary --wait
-xcrun stapler staple build/installer-dist/MokuroBrowserSetup.app
-xcrun stapler validate build/installer-dist/MokuroBrowserSetup.app
-codesign --verify --deep --strict --verbose=2 build/installer-dist/MokuroBrowserSetup.app
-spctl --assess --type execute --verbose=4 build/installer-dist/MokuroBrowserSetup.app
-ditto -c -k --sequesterRsrc --keepParent build/installer-dist/MokuroBrowserSetup.app dist/MokuroBrowserSetup-macos-arm64.zip
+xcrun notarytool submit dist/MokuroBrowser-macos-arm64.zip --keychain-profile mokuro-notary --wait
+xcrun stapler staple build/installer-dist/MokuroBrowser.app
+xcrun stapler validate build/installer-dist/MokuroBrowser.app
+codesign --verify --deep --strict --verbose=2 build/installer-dist/MokuroBrowser.app
+spctl --assess --type execute --verbose=4 build/installer-dist/MokuroBrowser.app
+ditto -c -k --sequesterRsrc --keepParent build/installer-dist/MokuroBrowser.app dist/MokuroBrowser-macos-arm64.zip
 ```
 
 Repeat on the Intel build, using its `macos-x64.zip` name. If notarization is
