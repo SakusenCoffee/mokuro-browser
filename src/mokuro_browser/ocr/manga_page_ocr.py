@@ -1,4 +1,5 @@
 import cv2
+import hashlib
 import numpy as np
 import os
 from PIL import Image
@@ -54,8 +55,25 @@ def cached_model_path(model_name):
     except LocalEntryNotFoundError:
         return model_name
     required = ("config.json", "preprocessor_config.json", "tokenizer_config.json", "vocab.txt")
-    if (all((snapshot / name).is_file() for name in required)
-            and any((snapshot / name).is_file() for name in ("model.safetensors", "pytorch_model.bin"))):
+    checkpoint = next((snapshot / name for name in ("model.safetensors", "pytorch_model.bin")
+                       if (snapshot / name).is_file()), None)
+    if all((snapshot / name).is_file() for name in required) and checkpoint:
+        # Hugging Face blob names are SHA-256 digests.  A download interrupted
+        # after its blob had been placed in the cache otherwise looks complete
+        # to snapshot_download and makes torch fail much later with a cryptic
+        # PytorchStreamReader error.
+        blob = checkpoint.resolve()
+        digest = blob.name
+        if len(digest) == 64 and all(character in "0123456789abcdef" for character in digest):
+            checksum = hashlib.sha256()
+            with blob.open("rb") as stream:
+                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                    checksum.update(chunk)
+            actual = checksum.hexdigest()
+            if actual != digest:
+                logger.warning("Discarding corrupt cached Manga OCR checkpoint")
+                blob.unlink(missing_ok=True)
+                return model_name
         return str(snapshot)
     return model_name
 

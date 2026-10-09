@@ -48,6 +48,21 @@ class OcrTests(unittest.TestCase):
                 self.assertTrue(download.call_args.kwargs["local_files_only"])
                 self.assertEqual(cached_model_path("other/model"), "other/model")
 
+    def test_corrupt_hugging_face_checkpoint_is_discarded(self):
+        with tempfile.TemporaryDirectory() as directory:
+            snapshot = Path(directory) / "snapshot"
+            blobs = Path(directory) / "blobs"
+            snapshot.mkdir()
+            blobs.mkdir()
+            for filename in ("config.json", "preprocessor_config.json", "tokenizer_config.json", "vocab.txt"):
+                (snapshot / filename).touch()
+            blob = blobs / ("a" * 64)
+            blob.write_bytes(b"truncated checkpoint")
+            (snapshot / "pytorch_model.bin").symlink_to(blob)
+            with mock.patch("mokuro_browser.ocr.manga_page_ocr.snapshot_download", return_value=snapshot):
+                self.assertEqual(cached_model_path("kha-white/manga-ocr-base"), "kha-white/manga-ocr-base")
+            self.assertFalse(blob.exists())
+
     def test_batched_recognition_keeps_order_and_disables_gradients(self):
         ocr = MangaPageOcr(disable_ocr=True, ocr_batch_size=2)
         batches = []
