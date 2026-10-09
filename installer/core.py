@@ -307,21 +307,23 @@ def install(uv, wheel, *, root=None, bin_dir=None, reuse=True, python=None,
             stage(20, "Preparing Python…")
             run([*command, venv])
             interpreter = env_python(venv)
-            stage(35, "Downloading and installing OCR dependencies — this can take several minutes…")
             if existing:
+                # The probe above verified this environment has Mokuro and all
+                # OCR runtime packages.  A launcher update only needs the new
+                # mokuro-browser wheel, so do not invoke dependency resolution
+                # (which can needlessly contact the network and look like a
+                # first-time install).
+                stage(35, "Reusing installed OCR dependencies…")
                 sites = list(dict.fromkeys(existing["sites"]))
                 site_path = Path(run([interpreter, "-c", "import sysconfig; print(sysconfig.get_path('purelib'))"], quiet=True).strip())
                 atomic_write(site_path / "mokuro-existing.pth", "\n".join(f"import site; site.addsitedir({value!r})" for value in sites) + "\n")
-                constraints = root / "gpu-constraints.txt"
-                atomic_write(constraints, f"torch=={existing['torch']}\ntorchvision=={existing['torchvision']}\n")
-                # pip recognizes inherited packages; uv's resolver intentionally ignores them.
-                run([interpreter, "-m", "pip", "--isolated", "install", "--no-input",
-                     "--disable-pip-version-check", "-c", constraints, wheel])
-                # A same-version repair must install its own copy, rather than
-                # inheriting a potentially broken app from the previous env.
+                # Install our application itself rather than inheriting it, so
+                # the server uses the updated version.  Its already-probed OCR
+                # dependencies stay in the previous environment.
                 run([interpreter, "-m", "pip", "--isolated", "install", "--no-input",
                      "--disable-pip-version-check", "--no-deps", "--force-reinstall", wheel])
             else:
+                stage(35, "Downloading and installing OCR dependencies — this can take several minutes…")
                 run([uv, "pip", "install", "--python", interpreter, "--torch-backend", "cpu", wheel])
             stage(85, "Checking the installed OCR and preparing the extension…")
             # State-isolated tests install the helper but never touch real
