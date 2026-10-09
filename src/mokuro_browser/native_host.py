@@ -231,8 +231,23 @@ def start(config):
     waiting_for_port = current.get("error") and "occupied by another local program" in current["error"]
     if current.get("error") and not waiting_for_port:
         raise RuntimeError(current["error"])
+    deadline = time.monotonic() + START_TIMEOUT
     if waiting_for_port:
         _log(config, "Launcher: waiting for the previous server to release the port…")
+        # A stop request is asynchronous.  Do not launch the replacement
+        # process until the old one has released the port: otherwise the new
+        # process exits immediately and the UI incorrectly reports a failure.
+        while time.monotonic() < deadline:
+            time.sleep(START_POLL_INTERVAL)
+            current = status(config)
+            if current["running"]:
+                return current
+            if not current.get("error"):
+                break
+            if "occupied by another local program" not in current["error"]:
+                raise RuntimeError(current["error"])
+        else:
+            raise RuntimeError("The previous Mokuro server did not release its port. Check its server log and try again.")
     Path(config["log_file"]).parent.mkdir(parents=True, exist_ok=True)
     options = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL,
                "close_fds": True}
@@ -247,16 +262,12 @@ def start(config):
         if config.get(key):
             command.extend(["--" + key.replace("_", "-"), config[key]])
     subprocess.Popen(command, **options)
-    deadline = time.monotonic() + START_TIMEOUT
-    logged_wait = waiting_for_port
+    logged_wait = False
     while time.monotonic() < deadline:
         time.sleep(START_POLL_INTERVAL)
         current = status(config)
         if current["running"]:
             return current
-        # A stop request is asynchronous. During that short hand-off the old
-        # process can still own the port, so keep waiting for it to disappear
-        # instead of reporting a failed start to the launcher.
         if current.get("error") and "occupied by another local program" not in current["error"]:
             raise RuntimeError(current["error"])
         if not logged_wait and current.get("error"):

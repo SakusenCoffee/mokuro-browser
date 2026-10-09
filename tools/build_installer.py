@@ -64,7 +64,9 @@ def main():
                "--name", "MokuroBrowser", "--distpath", str(output),
                "--workpath", str(ROOT / "build/pyinstaller"), "--specpath", str(ROOT / "build"),
                "--paths", str(ROOT), "--add-data", f"{wheel}{os.pathsep}payload",
-               "--hidden-import", "certifi",
+               # Ship certifi's Mozilla CA file as well as its module. The
+               # frozen AppImage cannot rely on a host CA store being present.
+               "--collect-data", "certifi",
                "--add-data", f"{licenses}{os.pathsep}payload/licenses", "--add-binary", f"{binary}{os.pathsep}payload",
                "--add-binary", f"{native_host}{os.pathsep}payload",
                "--add-data", f"{ROOT / 'extension/icon-128.png'}{os.pathsep}payload"]
