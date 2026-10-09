@@ -6,6 +6,8 @@ Local Japanese manga OCR for Chromium and Firefox, with selectable text and Yomi
 
 Download from [Releases](https://github.com/SakusenCoffee/mokuro-browser/releases/latest).
 
+Read the [privacy policy](PRIVACY.md).
+
 | Platform | Installer |
 | --- | --- |
 | Windows x64 | `MokuroBrowser-windows-x64.exe` |
