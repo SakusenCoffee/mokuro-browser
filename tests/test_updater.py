@@ -1,12 +1,14 @@
 import io
 import json
 from pathlib import Path
+import ssl
 import sys
 import tempfile
 import unittest
 import zipfile
 from types import SimpleNamespace
 from unittest import mock
+from urllib.error import URLError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from installer import main, updater
@@ -70,6 +72,16 @@ class UpdaterTests(unittest.TestCase):
         self.assertEqual(result, {"version": "1.3.0", "name": "MokuroBrowserSetup-linux-x64.AppImage",
                                   "url": "https://github.com/SakusenCoffee/mokuro-browser/releases/download/v1.3.0/MokuroBrowserSetup-linux-x64.AppImage",
                                   "size": 1234})
+
+    def test_default_update_opener_retries_with_bundled_ca_store(self):
+        value = {"tag_name": "v1.2.0", "assets": []}
+        certificate_error = URLError(ssl.SSLCertVerificationError(1, "CERTIFICATE_VERIFY_FAILED"))
+        response = Response(json.dumps(value).encode())
+        with mock.patch.object(updater, "urlopen", side_effect=[certificate_error, response]) as opener:
+            version, assets = updater.latest()
+        self.assertEqual((version, assets), ("1.2.0", {}))
+        self.assertEqual(opener.call_count, 2)
+        self.assertIn("context", opener.call_args.kwargs)
 
     def test_download_checks_final_host_and_size(self):
         update = {"url": "https://github.com/SakusenCoffee/mokuro-browser/releases/download/v1/app", "size": 4}

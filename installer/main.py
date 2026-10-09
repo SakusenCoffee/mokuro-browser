@@ -128,19 +128,9 @@ def gui(args):
     update_status = tk.StringVar(value="Checking GitHub releases…")
     ttk.Label(frame, textvariable=update_status, style="Subtle.TLabel", wraplength=880).pack(anchor="w", pady=(0, 8))
     ttk.Label(logs_frame, text="Activity logs", font=("Segoe UI", 18)).pack(anchor="w", pady=(0, 10))
-    log_tabs = ttk.Notebook(logs_frame)
-    log_tabs.pack(fill="both", expand=True)
-    setup_log_frame = ttk.Frame(log_tabs, padding=1)
-    server_log_frame = ttk.Frame(log_tabs, padding=1)
-    log_tabs.add(setup_log_frame, text="Setup activity")
-    log_tabs.add(server_log_frame, text="Server log")
-    log_tabs.select(server_log_frame)
-    output = ScrolledText(setup_log_frame, height=12, wrap="word", state="disabled", bg="#121d1b", fg="#dbe9e4",
+    output = ScrolledText(logs_frame, height=12, wrap="word", state="disabled", bg="#121d1b", fg="#dbe9e4",
                           insertbackground="#e8f1ee", relief="flat", padx=12, pady=10)
     output.pack(fill="both", expand=True)
-    server_output = ScrolledText(server_log_frame, height=12, wrap="word", state="disabled", bg="#121d1b", fg="#dbe9e4",
-                                 insertbackground="#e8f1ee", relief="flat", padx=12, pady=10)
-    server_output.pack(fill="both", expand=True)
     actions = ttk.Frame(logs_frame)
     actions.pack(fill="x", pady=(10, 0))
     messages = queue.Queue()
@@ -392,12 +382,15 @@ def gui(args):
             except (OSError, ValueError, KeyError):
                 text = "The server log is unavailable."
             if text != server_log_text:
+                if server_log_text is None:
+                    write("Server log:\n" + text.rstrip())
+                elif text.startswith(server_log_text):
+                    added = text[len(server_log_text):].rstrip()
+                    if added:
+                        write("Server: " + added.replace("\n", "\nServer: "))
+                else:
+                    write("Server log continued after rotation:\n" + text.rstrip())
                 server_log_text = text
-                server_output.configure(state="normal")
-                server_output.delete("1.0", "end")
-                server_output.insert("end", text)
-                server_output.see("end")
-                server_output.configure(state="disabled")
     def show_installation(record):
         nonlocal installed_record
         installed_record = record

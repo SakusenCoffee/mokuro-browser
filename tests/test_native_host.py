@@ -61,6 +61,22 @@ class NativeHostTests(unittest.TestCase):
         self.assertEqual(command[command.index("--history-file") + 1], "/tmp/history")
         self.assertNotIn("/tmp/token", command[:3])
 
+    def test_start_waits_for_a_previous_server_to_release_the_port(self):
+        config = {"python": sys.executable, "port": 8766, "token_file": "/tmp/token",
+                  "log_file": "/tmp/log", "settings_file": "/tmp/settings"}
+        states = [
+            {"running": False, "error": "Port 8766 is occupied by another local program."},
+            {"running": False},
+            {"running": True, "health": {}},
+        ]
+        with mock.patch.object(native_host, "status", side_effect=states), \
+             mock.patch.object(native_host, "_log") as log, \
+             mock.patch.object(native_host.subprocess, "Popen"), \
+             mock.patch.object(native_host.time, "sleep"):
+            result = native_host.start(config)
+        self.assertTrue(result["running"])
+        log.assert_called_once()
+
     def test_pair_returns_existing_code_without_replacing_it(self):
         with tempfile.TemporaryDirectory() as directory:
             token = Path(directory) / "token"

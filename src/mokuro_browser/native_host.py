@@ -23,6 +23,8 @@ HOST_NAME = "com.sakusencoffee.mokuro_browser"
 CHROME_EXTENSION_ID = "knmjaljhcdldboegcjajcomkmogpmfff"
 FIREFOX_EXTENSION_ID = "mokuro-browser@local"
 MAX_MESSAGE_BYTES = 1024 * 1024
+START_TIMEOUT = 60
+START_POLL_INTERVAL = .25
 
 
 def atomic_write(path, value, mode=0o600):
@@ -209,12 +211,26 @@ def status(config):
         return {"running": False}
 
 
+def _log(config, message):
+    """Append helper status without interfering with the server process."""
+    try:
+        path = Path(config["log_file"])
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as stream:
+            stream.write(message + "\n")
+    except OSError:
+        pass
+
+
 def start(config):
     current = status(config)
     if current["running"]:
         return current
-    if current.get("error"):
+    waiting_for_port = current.get("error") and "occupied by another local program" in current["error"]
+    if current.get("error") and not waiting_for_port:
         raise RuntimeError(current["error"])
+    if waiting_for_port:
+        _log(config, "Launcher: waiting for the previous server to release the port…")
     Path(config["log_file"]).parent.mkdir(parents=True, exist_ok=True)
     options = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL,
                "close_fds": True}
@@ -229,14 +245,21 @@ def start(config):
         if config.get(key):
             command.extend(["--" + key.replace("_", "-"), config[key]])
     subprocess.Popen(command, **options)
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + START_TIMEOUT
+    logged_wait = waiting_for_port
     while time.monotonic() < deadline:
-        time.sleep(.15)
+        time.sleep(START_POLL_INTERVAL)
         current = status(config)
         if current["running"]:
             return current
-        if current.get("error"):
+        # A stop request is asynchronous. During that short hand-off the old
+        # process can still own the port, so keep waiting for it to disappear
+        # instead of reporting a failed start to the launcher.
+        if current.get("error") and "occupied by another local program" not in current["error"]:
             raise RuntimeError(current["error"])
+        if not logged_wait and current.get("error"):
+            _log(config, "Launcher: waiting for the previous server to release the port…")
+            logged_wait = True
     raise RuntimeError("The local Mokuro server did not start. Check its server log and try again.")
 
 

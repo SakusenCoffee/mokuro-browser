@@ -19,7 +19,7 @@ from urllib.parse import parse_qs, urlsplit
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from . import __version__
-from .config import pairing_token, data_dir, preferences, update_preferences
+from .config import pairing_token, data_dir, model_cache_dir, preferences, update_preferences
 from .dashboard import DASHBOARD
 from .history import ReadingHistory
 from .monitor import LoadMonitor
@@ -47,8 +47,20 @@ def normalize_image(data):
 
 
 def load_mokuro(**options):
+    # Keep model files outside the managed environment and AppImage. This
+    # directory is stable across launcher updates, relaunches, and shutdowns.
+    model_cache = model_cache_dir()
+    model_cache.mkdir(parents=True, exist_ok=True)
+    os.environ.setdefault("HF_HOME", str(model_cache / "huggingface"))
+    os.environ.setdefault("HUGGINGFACE_HUB_CACHE", str(model_cache / "huggingface" / "hub"))
+    os.environ.setdefault("TRANSFORMERS_CACHE", str(model_cache / "huggingface" / "transformers"))
     os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
     from .ocr.manga_page_ocr import MangaPageOcr
+    # mokuro's detector cache otherwise defaults to ~/.cache/manga-ocr. Point
+    # it at the same persistent application-owned cache as the Hugging Face
+    # model so every model survives AppImage and computer restarts.
+    from .ocr.manga_page_ocr import configure_model_cache
+    configure_model_cache(model_cache / "manga-ocr")
     return MangaPageOcr(**options)
 
 
@@ -102,6 +114,7 @@ class OcrEngine:
     def load(self):
         with self.lock:
             self.model_state, self.model_error = "loading", None
+        print("Loading OCR models…", flush=True)
         try:
             self.model = self.loader()
         except Exception as error:
@@ -352,7 +365,8 @@ def serve(args):
                                          ocr_batch_size=args.ocr_batch_size))
     history = ReadingHistory(args.history_file or data_dir() / "reading-history.sqlite3")
     server = make_server(token, args.port, engine, history, settings["save_history"], args.settings_file)
-    print(f"Mokuro browser server: http://127.0.0.1:{args.port}; loading models now", flush=True)
+    print(f"Mokuro browser server: http://127.0.0.1:{args.port}", flush=True)
+    print("Loading OCR models from the persistent cache…", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

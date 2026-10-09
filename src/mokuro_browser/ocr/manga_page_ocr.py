@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import os
 from PIL import Image
 from loguru import logger
 from scipy.signal.windows import gaussian
@@ -16,6 +17,32 @@ import torch
 from pathlib import Path
 from huggingface_hub import snapshot_download
 from huggingface_hub.errors import LocalEntryNotFoundError
+
+
+def configure_model_cache(root):
+    """Use a persistent detector cache and never expose a partial download."""
+    root = Path(root)
+    root.mkdir(parents=True, exist_ok=True)
+    cache.root = root
+    if getattr(cache, "_mokuro_browser_atomic", False):
+        return
+    original_download = cache._download_if_needed
+
+    def atomic_download(path, url):
+        marker = path.with_name(path.name + ".complete")
+        if path.is_file() and marker.is_file():
+            return
+        temporary = path.with_name("." + path.name + ".part")
+        temporary.unlink(missing_ok=True)
+        try:
+            original_download(temporary, url)
+            os.replace(temporary, path)
+            marker.write_text("ok\n", encoding="ascii")
+        finally:
+            temporary.unlink(missing_ok=True)
+
+    cache._download_if_needed = atomic_download
+    cache._mokuro_browser_atomic = True
 
 
 def cached_model_path(model_name):

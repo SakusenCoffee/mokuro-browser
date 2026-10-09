@@ -39,6 +39,10 @@ def config_dir():
 def data_dir():
     return state_override("data") or Path(user_data_dir(APP, appauthor=False))
 
+def model_cache_dir():
+    """Return the persistent cache shared by all launcher/server restarts."""
+    return data_dir() / "model-cache"
+
 def log_dir():
     return state_override("logs") or Path(user_log_dir(APP, appauthor=False))
 

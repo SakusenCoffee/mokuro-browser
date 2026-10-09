@@ -156,7 +156,7 @@ def control(record, action):
     message = json.dumps({"action": action}).encode("utf-8")
     options = {"input": struct.pack("=I", len(message)) + message,
                "stdout": subprocess.PIPE, "stderr": subprocess.PIPE,
-               "timeout": 20, "check": True, "env": core.child_environment()}
+               "timeout": 75, "check": True, "env": core.child_environment()}
     if os.name == "nt":
         options["creationflags"] = subprocess.CREATE_NO_WINDOW
     response = subprocess.run([record["native_host"]], **options)

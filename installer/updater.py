@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import ssl
 import subprocess
 import sys
 import zipfile
@@ -14,6 +15,23 @@ from urllib.request import Request, urlopen
 API = "https://api.github.com/repos/SakusenCoffee/mokuro-browser/releases/latest"
 LATEST = "https://github.com/SakusenCoffee/mokuro-browser/releases/latest"
 MAX_BYTES = 2 * 1024 * 1024 * 1024
+
+
+def _secure_urlopen(request, timeout):
+    """Use the system CA store, then a bundled certifi store if needed."""
+    try:
+        return urlopen(request, timeout=timeout)
+    except Exception as error:
+        detail = str(error)
+        reason = getattr(error, "reason", None)
+        if "CERTIFICATE_VERIFY_FAILED" not in detail and "CERTIFICATE_VERIFY_FAILED" not in str(reason):
+            raise
+        try:
+            import certifi
+        except ImportError:
+            raise
+        context = ssl.create_default_context(cafile=certifi.where())
+        return urlopen(request, timeout=timeout, context=context)
 
 
 def version_key(value):
@@ -39,7 +57,8 @@ def asset_name(system=None, machine=None):
     raise RuntimeError("Launcher updates are not available on this system.")
 
 
-def latest(opener=urlopen):
+def latest(opener=None):
+    opener = opener or _secure_urlopen
     request = Request(API, headers={"Accept": "application/vnd.github+json", "User-Agent": "mokuro-browser"})
     with opener(request, timeout=15) as response:
         value = json.load(response)
@@ -49,8 +68,9 @@ def latest(opener=urlopen):
     return tag.removeprefix("v"), assets
 
 
-def latest_download(name, opener=urlopen):
+def latest_download(name, opener=None):
     """Resolve a release without the rate-limited GitHub API."""
+    opener = opener or _secure_urlopen
     request = Request(LATEST, method="HEAD", headers={"User-Agent": "mokuro-browser"})
     with opener(request, timeout=15) as response:
         match = re.fullmatch(r"/SakusenCoffee/mokuro-browser/releases/tag/v?([0-9.]+)",
@@ -75,7 +95,7 @@ def latest_download(name, opener=urlopen):
     return {"version": version, "name": name, "url": address, "size": size}
 
 
-def available(current, opener=urlopen, system=None, machine=None):
+def available(current, opener=None, system=None, machine=None):
     name = asset_name(system, machine)
     try:
         version, assets = latest(opener)
@@ -105,7 +125,8 @@ def destination(update, current=None, root=None, environment=None, system=None):
     return Path(root or default_root()) / "updates" / update["name"]
 
 
-def download(update, destination, opener=urlopen):
+def download(update, destination, opener=None):
+    opener = opener or _secure_urlopen
     address = update["url"]
     if urlparse(address).scheme != "https":
         raise ValueError("The update URL is not HTTPS.")
