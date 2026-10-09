@@ -9,9 +9,14 @@ FILES = ("manifest.json", "background.js", "content.js", "page-cache.js", "readi
          "icon-16.png", "icon-32.png", "icon-48.png", "icon-128.png")
 
 def main():
-    version = json.loads((ROOT / "extension/manifest.json").read_text())["version"]
+    manifest = json.loads((ROOT / "extension/manifest.json").read_text())
+    version = manifest["version"]
+    # The key pins the ID of an unpacked development extension. Chrome Web
+    # Store rejects it and supplies the production extension ID itself.
+    manifest.pop("key", None)
     destination = ROOT / "dist" / f"mokuro-browser-extension-{version}.zip"
     prepared = {name: (ROOT / "extension" / name).read_bytes() for name in FILES}
+    prepared["manifest.json"] = (json.dumps(manifest, indent=2) + "\n").encode("utf-8")
     prepared.update({name: (ROOT / name).read_bytes() for name in ("LICENSE", "THIRD_PARTY.md")})
     destination.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_DEFLATED) as archive:
