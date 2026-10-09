@@ -50,17 +50,17 @@ jobs:
         run: python tools/build_appimage_installer.py
       - name: Check AppImage install, update and uninstall without FUSE
         if: runner.os == 'Linux'
-        run: python tools/smoke_installer.py --executable dist/MokuroBrowserSetup-${{ matrix.label }}.AppImage --extract-and-run
+        run: python tools/smoke_installer.py --executable dist/MokuroBrowser-${{ matrix.label }}.AppImage --extract-and-run
       - name: Check GUI on Linux
         if: runner.os == 'Linux'
-        run: xvfb-run -a build/installer-dist/MokuroBrowserSetup --gui-smoke-test
+        run: xvfb-run -a build/installer-dist/MokuroBrowser --gui-smoke-test
       - name: Check AppImage GUI without FUSE
         if: runner.os == 'Linux'
-        run: xvfb-run -a dist/MokuroBrowserSetup-${{ matrix.label }}.AppImage --appimage-extract-and-run --gui-smoke-test
+        run: xvfb-run -a dist/MokuroBrowser-${{ matrix.label }}.AppImage --appimage-extract-and-run --gui-smoke-test
       - name: Check GUI on Windows and macOS
         if: runner.os != 'Linux'
-        run: build/installer-dist/MokuroBrowserSetup --gui-smoke-test
+        run: build/installer-dist/MokuroBrowser --gui-smoke-test
       - uses: actions/upload-artifact@v4
         with:
           name: installer-${{ matrix.label }}
-          path: dist/MokuroBrowserSetup-*
+          path: dist/MokuroBrowser-*
