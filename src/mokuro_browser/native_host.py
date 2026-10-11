@@ -21,7 +21,9 @@ from . import __version__
 from .config import config_dir, data_dir, log_dir, pairing_token
 
 HOST_NAME = "com.sakusencoffee.mokuro_browser"
-CHROME_EXTENSION_ID = "knmjaljhcdldboegcjajcomkmogpmfff"
+# Chrome Web Store production ID. The store assigns this ID when signing the
+# published extension; it differs from the locally unpacked development ID.
+CHROME_EXTENSION_ID = "efmkjbmmnggbgocomldlieobpcahkodl"
 FIREFOX_EXTENSION_ID = "mokuro-browser@local"
 MAX_MESSAGE_BYTES = 1024 * 1024
 START_TIMEOUT = 60
