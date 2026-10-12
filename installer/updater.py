@@ -122,6 +122,11 @@ def destination(update, current=None, root=None, environment=None, system=None):
                    or (sys.executable if getattr(sys, "frozen", False) else sys.argv[0])).absolute()
     if system.startswith("linux") and current.suffix.lower() == ".appimage" and os.access(current.parent, os.W_OK):
         return current
+    return private_destination(update, root)
+
+
+def private_destination(update, root=None):
+    """Return an application-owned location for updates that cannot replace their launcher."""
     return Path(root or default_root()) / "updates" / update["name"]
 
 

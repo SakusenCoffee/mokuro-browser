@@ -480,7 +480,18 @@ def gui(args):
         write(f"Downloading Mokuro Browser {update_info['version']}. The browser extension will not be changed.")
         def work():
             try:
-                target = updater.download(update_info, update_destination(update_info))
+                target = update_destination(update_info)
+                try:
+                    target = updater.download(update_info, target)
+                except PermissionError:
+                    # A mounted, managed, or otherwise protected AppImage can
+                    # look writable but still reject atomic replacement. Keep
+                    # the update under our control and launch it from there.
+                    fallback = updater.private_destination(update_info)
+                    if target == fallback:
+                        raise
+                    write("Cannot replace this AppImage; installing the update in Mokuro Browser's managed folder instead.")
+                    target = updater.download(update_info, fallback)
                 updater.launch_update(target)
                 messages.put(("update_complete", None))
             except Exception as error:

@@ -47,6 +47,11 @@ class UpdaterTests(unittest.TestCase):
                                      system="linux")
         self.assertEqual(result, Path("/private/updates/MokuroBrowser-linux-x64.AppImage"))
 
+    def test_private_destination_uses_application_update_folder(self):
+        update = {"name": "MokuroBrowser-linux-x64.AppImage"}
+        self.assertEqual(updater.private_destination(update, "/private"),
+                         Path("/private/updates/MokuroBrowser-linux-x64.AppImage"))
+
     def test_newer_matching_asset_is_offered(self):
         value = {"tag_name": "v1.2.0", "assets": [{"name": "MokuroBrowser-linux-x64.AppImage",
                  "browser_download_url": "https://github.com/SakusenCoffee/mokuro-browser/releases/download/v1/app",
