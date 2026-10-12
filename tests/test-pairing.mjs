@@ -56,4 +56,7 @@ await assert.rejects(evaluate("launch({type:'PAIR',token:'wrong-code-with-at-lea
 assert.equal(settings.pairingToken, token, 'failed re-pair preserves the working code');
 offline = true;
 await assert.rejects(evaluate("launch({type:'HEALTH'}, {})"), /server is off/);
+assert.equal(await evaluate("liveServer()"), null, 'automatic work stays inactive while the local server is off');
+await assert.rejects(evaluate("launch({type:'SCAN_LARGEST',tabId:1}, {})"), /server is off/,
+  'manual scans also stop before injecting or inspecting the page');
 console.log('PASS: native server control, first-run pairing, authenticated health, bad codes, tab isolation, retry and popup server message');

@@ -40,6 +40,23 @@ async function api(path, options = {}, pairingCode) {
   return result;
 }
 
+// Automatic page handling must never wake up the OCR path just because a
+// manga reader loaded an image. In particular, an installed extension can
+// outlive the desktop app, so only a previously paired, live server enables
+// automatic work. Passing the saved token prevents this probe from starting
+// the native host or attempting automatic pairing.
+async function liveServer() {
+  const {pairingToken} = await chrome.storage.local.get("pairingToken");
+  if (!pairingToken) return null;
+  try { return await api("/health", {}, pairingToken); }
+  catch { return null; }
+}
+
+async function requireLiveServer() {
+  if (await liveServer()) return;
+  throw new Error("Mokuro Browser server is off. Open the Mokuro Browser app, start the server, then try again.");
+}
+
 async function inject(tabId) {
   try {
     await chrome.scripting.executeScript({target: {tabId}, files: ["ocr-result.js", "content.js"]});
@@ -173,6 +190,7 @@ async function launch(message, sender) {
     const settings = await chrome.storage.local.get({autoScan: false});
     const tab = await chrome.tabs.get(tabId);
     if (!tab.active || (message.type === "AUTO_SCAN" && !settings.autoScan)) return {started: false};
+    if (!await liveServer()) return {inactive: true, started: false};
     return checkPage(tabId, message.target, message.type === "AUTO_SCAN");
   }
   if (message.type === "CANCEL") {
@@ -182,6 +200,9 @@ async function launch(message, sender) {
   }
   if (["SCAN_IMAGE", "SCAN_LARGEST", "SCAN_VISIBLE"].includes(message.type) && busy.has(tabId)) {
     throw new Error("A scan is already running in this tab. Clear it first to cancel.");
+  }
+  if (["SCAN_IMAGE", "CHECK_PAGE", "PICK_IMAGE", "SCAN_LARGEST", "SCAN_VISIBLE"].includes(message.type)) {
+    await requireLiveServer();
   }
   if (message.type === "SCAN_IMAGE") {
     if (!sender.tab) throw new Error("Choose an image in a tab first.");
@@ -238,6 +259,8 @@ chrome.tabs.onRemoved.addListener(tabId => {
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId !== "mokuro-image") return;
   try {
+    // Do not inject or inspect page images while the local server is off.
+    if (!await liveServer()) return;
     await inject(tab.id);
     const target = await tell(tab.id, "FIND_IMAGE", {src: info.srcUrl});
     if (target.error) throw new Error(target.error);

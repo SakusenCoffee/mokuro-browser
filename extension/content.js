@@ -1,5 +1,9 @@
 (() => {
   if (globalThis.__localMokuroInstalled) return;
+  // A script left behind after a Chrome extension update cannot safely talk to
+  // its old service worker. Stay invisible instead of showing an alarming
+  // "Extension context invalidated" notice on the page.
+  if (!globalThis.chrome?.runtime?.id) return;
   globalThis.__localMokuroInstalled = true;
   const pageKey = crypto.randomUUID();
   const images = new Map();
@@ -17,7 +21,33 @@
   let missingKey = null;
   let missingUntil = 0;
   let hoverFontPercent = 100;
+  let active = true;
+  let observer;
   const attempted = new Map();
+
+  function contextInvalidated(error) {
+    return !globalThis.chrome?.runtime?.id || /Extension context invalidated/i.test(String(error?.message || error));
+  }
+  function deactivate() {
+    active = false;
+    clearTimeout(autoTimer);
+    autoTimer = null;
+    observer?.disconnect();
+  }
+  async function send(message) {
+    if (!active || !globalThis.chrome?.runtime?.id) {
+      deactivate();
+      return {ok: false, contextInvalidated: true};
+    }
+    try { return await chrome.runtime.sendMessage(message); }
+    catch (error) {
+      if (contextInvalidated(error)) {
+        deactivate();
+        return {ok: false, contextInvalidated: true};
+      }
+      throw error;
+    }
+  }
 
   const host = document.createElement("div");
   host.id = "local-mokuro-overlay";
@@ -294,8 +324,8 @@
       event.preventDefault(); event.stopImmediatePropagation();
       pickerCleanup();
       try {
-        chrome.runtime.sendMessage({type: "SCAN_IMAGE", target: descriptor(image)}).then(reply => {
-          if (!reply.ok) notify(reply.error, true);
+        send({type: "SCAN_IMAGE", target: descriptor(image)}).then(reply => {
+          if (!reply.contextInvalidated && !reply.ok) notify(reply.error, true);
         });
       } catch (error) { notify(error.message, true); }
     };
@@ -341,9 +371,9 @@
 
   async function scanAuto() {
     autoTimer = null;
-    if (autoRunning || pickerCleanup || document.visibilityState !== "visible") return;
+    if (!active || !autoEnabled || autoRunning || pickerCleanup || document.visibilityState !== "visible") return;
     if (Date.now() < retryAfter) { scheduleAuto(retryAfter - Date.now()); return; }
-    const image = mangaImage() || (!autoEnabled && visibleImages().find(item => item.image.complete)?.image);
+    const image = mangaImage();
     if (!image) return;
     const target = descriptor(image);
     const key = MokuroResults.key(target);
@@ -354,8 +384,14 @@
     if ((attempted.get(key) || 0) > Date.now()) return;
     autoRunning = true;
     try {
-      const reply = await chrome.runtime.sendMessage({type: autoEnabled ? "AUTO_SCAN" : "CHECK_CACHE", target});
+      const reply = await send({type: "AUTO_SCAN", target});
+      if (reply.contextInvalidated) return;
       if (!reply.ok) throw new Error(reply.error);
+      if (reply.data.inactive) {
+        retryAfter = Date.now() + 15000;
+        scheduleAuto(15000);
+        return;
+      }
       if (reply.data.missing) { missingKey = key; missingUntil = Date.now() + 5000; }
       if (reply.data.restored) attempted.delete(key);
       if (reply.data.started || reply.data.started === false) {
@@ -363,6 +399,7 @@
         scheduleAuto(1500);
       }
     } catch (error) {
+      if (contextInvalidated(error)) { deactivate(); return; }
       remember(target); // Back off failures instead of permanently skipping a page.
       notify(error.message, true, true);
     } finally { autoRunning = false; }
@@ -378,18 +415,18 @@
     }
     clearTimeout(autoTimer);
     autoTimer = null;
-    scheduleAuto(0);
+    if (autoEnabled) scheduleAuto(0);
   }
 
   chrome.storage.local.get({autoScan: false, hoverFontPercent: 100}).then(settings => {
     setAuto(settings.autoScan);
     setFontPercent(settings.hoverFontPercent);
-  });
+  }).catch(error => { if (contextInvalidated(error)) deactivate(); });
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === "local" && changes.autoScan) setAuto(changes.autoScan.newValue);
     if (area === "local" && changes.hoverFontPercent) setFontPercent(changes.hoverFontPercent.newValue ?? 100);
   });
-  const observer = new MutationObserver(records => {
+  observer = new MutationObserver(records => {
     // Ignore our own overlay updates so progress notices don't restart the debounce.
     if (records.some(record => !host.contains(record.target))) scheduleAuto();
   });
@@ -401,7 +438,7 @@
   window.addEventListener("resize", () => scheduleAuto());
   window.addEventListener("popstate", () => scheduleAuto());
   // Handles client-side URL changes and responsive sources without DOM mutations.
-  setInterval(() => { if (!autoTimer) scheduleAuto(); }, 2500);
+  setInterval(() => { if (active && autoEnabled && !autoTimer) scheduleAuto(); }, 2500);
 
   chrome.runtime.onMessage.addListener((message, sender, reply) => {
     (async () => {
